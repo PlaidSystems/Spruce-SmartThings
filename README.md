@@ -24,11 +24,11 @@ Integrate Spruce GEN2 Controller and GEN1 or GEN2 Sensors with SmartThings. Cont
   
 **Install Overview**
   1. Create a new SmartApp using the *Spruce Connect* code
-    - **Enable OAUTH** in the app settings
+      - **Enable OAUTH** in the app settings
   2. Create 3 new device handlers using the code from:
-    - Spruce wifi master
-    - Spruce wifi schedule
-    - Spruce wifi zone
+      - Spruce wifi master
+      - Spruce wifi schedule
+      - Spruce wifi zone
   3. In the SmartThings app under *My Apps* select **Spruce Connect**
   4. User your Spruce account credentials to login and link SmartThings and Spruce
   5. Select 1 Spruce Controller to link, go to *next*
