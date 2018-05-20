@@ -39,3 +39,10 @@ Integrate Spruce GEN2 Controller and GEN1 or GEN2 Sensors with SmartThings. Cont
   10. Select any Spruce moisture sensors that are conected to SmartThings so that they will be available in the Spruce App
   
   **Save!**
+  
+  **TIPS**
+  - Make sure zones are setup and named correctly in the Spruce App before setting up the SmartThings integration. Simple but descriptive names are best and will help keep everything organized.  *This also helps with voice commands*
+  - Organize Master and Zone devices into a single "Room"
+  - When switching on a zone manually, the time can be set in the lower righ corner of the tile
+  - The *Start all Zones* button will run each zone for the time set in the lower right corner of the main tile
+  - Schedules can be paused with the **Contact Button** to the left of the *Start all Zones* button
