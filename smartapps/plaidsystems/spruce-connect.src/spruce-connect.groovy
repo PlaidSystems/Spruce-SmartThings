@@ -30,8 +30,9 @@ definition(
 	//appSetting "clientId"
 	//appSetting "clientSecret"
     //appSetting "serverUrl"
-    atomicState.clientid = "smartthings"
-    atomicState.clientSecret = "081ce71eec73b1fdad2253d1d88819a5"
+    
+    atomicState.clientid = "smartthings-beta"
+    atomicState.clientSecret = "rf1ce71eec8361fdab2253d1d8y819a5"
 }
 
 //-----------------pages----------------------------
