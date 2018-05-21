@@ -23,6 +23,7 @@ Integrate Spruce GEN2 Controller and GEN1 or GEN2 Sensors with SmartThings. Cont
   - Spruce sensors paired with ST can use the Spruce Connect to report values to the Spruce Cloud.
   
 **Install Overview**
+
 *It is recommended to setup and name all zones before connecting Spruce and SmartThings*
   1. Log into SmartThings IDE https://graph.api.smartthings.com/ with your SmartThings Username and Password
   2. Create a new SmartApp using the [*Spruce Connect*](https://github.com/PlaidSystems/Spruce-SmartThings/blob/master/smartapps/plaidsystems/spruce-connect.src/spruce-connect.groovy) code
