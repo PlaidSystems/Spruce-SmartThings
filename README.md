@@ -24,7 +24,7 @@ Integrate Spruce GEN2 Controller and GEN1 or GEN2 Sensors with SmartThings. Cont
   
 **Install Overview**
   1. Log into SmartThings IDE https://graph.api.smartthings.com/ with your SmartThings Username and Password
-  1. Create a new SmartApp using the *Spruce Connect* code
+  1. Create a new SmartApp using the [*Spruce Connect*](https://github.com/PlaidSystems/Spruce-SmartThings/blob/master/smartapps/plaidsystems/spruce-connect.src/spruce-connect.groovy) code
       - **Enable OAUTH** in the app settings
   2. Create 3 new device handlers using the code from:
       - *Spruce wifi master*
