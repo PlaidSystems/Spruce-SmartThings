@@ -39,16 +39,19 @@ Integrate Spruce GEN2 Controller and GEN1 or GEN2 Sensors with SmartThings. Cont
       - Add new Device Handlers from code for each
       - Copy and Paste the code
       - Save and Publish each
-  4. Close and Restart the SmartThings app to reload the availabel SmartApps 
-  5. In the SmartThings app under *Marketplace->SmartApps->My Apps* select **Spruce Connect**
-  6. User your Spruce account credentials to login and link SmartThings and Spruce
-  7. Select 1 Spruce Controller to link, go to *next*
-  8. The SmartApp will list the zones that will be provided to SmartThings at the top of the page
-  9. Select any **Contact** sensors you would like to use, these will **always** pause and resume the schedule
-  10. Select notifications that you would like to recieve through SmartThings, these settings do not effect Spruce app notification settings
-  11. Enable the **Spruce Pause Control** if you would like this control to show up as an available option for automations and SmartApps.  It can be used to pause or resume schedules.
-  12. Select any Spruce moisture sensors that are conected to SmartThings so that they will be available in the Spruce App
-  13. **Save!** your done, your Spruce devices will be under "Things" and any Sensors will start reporting to the Spruce Cloud at the next reporting interval.
+      
+**Setting up**
+
+  1. Close and Restart the SmartThings app to reload the availabel SmartApps 
+  2. In the SmartThings app under *Marketplace->SmartApps->My Apps* select **Spruce Connect**
+  3. User your Spruce account credentials to login and link SmartThings and Spruce
+  4. Select 1 Spruce Controller to link, go to *next*
+  5. The SmartApp will list the zones that will be provided to SmartThings at the top of the page
+  6. Select any **Contact** sensors you would like to use, these will **always** pause and resume the schedule
+  7. Select notifications that you would like to recieve through SmartThings, these settings do not effect Spruce app notification settings
+  8. Enable the **Spruce Pause Control** if you would like this control to show up as an available option for automations and SmartApps.  It can be used to pause or resume schedules.
+  9. Select any Spruce moisture sensors that are conected to SmartThings so that they will be available in the Spruce App
+  10. **Save!** your done, your Spruce devices will be under "Things" and any Sensors will start reporting to the Spruce Cloud at the next reporting interval.
   
   **TIPS**
   - Make sure zones are setup and named correctly in the Spruce App before setting up the SmartThings integration. Simple but descriptive names are best and will help keep everything organized.  *This also helps with voice commands*
