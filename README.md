@@ -42,7 +42,7 @@ Integrate Spruce GEN2 Controller and GEN1 or GEN2 Sensors with SmartThings. Cont
       
 **Setting up**
 
-  1. Close and Restart the SmartThings app to reload the availabel SmartApps 
+  1. Close and Restart the SmartThings app to reload the available SmartApps 
   2. In the SmartThings app under *Marketplace->SmartApps->My Apps* select **Spruce Connect**
   3. User your Spruce account credentials to login and link SmartThings and Spruce
   4. Select 1 Spruce Controller to link, go to *next*
