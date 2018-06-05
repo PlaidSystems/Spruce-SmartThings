@@ -1,7 +1,7 @@
 /**
  *  Spruce Web Connect Cloud-to-Cloud
  *  v1.0 - 04/01/18 - convert to cloud-cloud
- *  
+ *  v1.1 - 06/05/18 - correct IOS error, rename page to pageController
  *
  *  Copyright 2018 Plaid Systems
  *
@@ -79,7 +79,7 @@ def pageConnect(){
 def pageController(){
     if (atomicState.authToken && getControllerList()){
     	def select_device = getSpruceDevices()
-        dynamicPage(name: "pageDevices", uninstall: true, install:false, nextPage: "pageDevices") {            
+        dynamicPage(name: "pageController", uninstall: true, install:false, nextPage: "pageDevices") {            
             section("Select Spruce Controller\n to connect with SmartThings") {
             	input(name: "controller", title:"Select Spruce Controller:", type: "enum", required:true, multiple:false, description: "Tap to choose", metadata:[values:select_device])                
     		}
@@ -91,7 +91,8 @@ def pageController(){
 def pageDevices(){
 	if (atomicState.authToken && controllerSelected() && getControllerSettings()){
       log.debug atomicState.zoneUpdate
-        return dynamicPage(name: "pageDevices", uninstall: true, install:true) {
+      log.debug "pageDevices"
+        dynamicPage(name: "pageDevices", uninstall: true, install:true) {
         	if(atomicState.zoneUpdate == true) section("Device changes found, device tiles will be updated! \n\nErrors will occur if devices are assigned to Automations and SmartApps, please remove before updating.\n"){}
          	section("Select settings for connected devices\nConnected controller: ${settings.controller}\nConnected zones: ${zoneList()}") {            	
                 input "contacts", "capability.contactSensor", title: "Contact sensors will pause or resume water:", required: false, multiple: true
