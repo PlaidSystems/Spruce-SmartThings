@@ -904,8 +904,8 @@ def callback() {
                 ]
         ]
         
-        httpPost(tokenParams) { resp ->        
-            atomicState.refreshToken = resp.data.refresh_token
+        httpPost(tokenParams) { resp ->
+        	atomicState.refreshToken = resp.data.refresh_token
             atomicState.authToken = resp.data.access_token           
         }
         
