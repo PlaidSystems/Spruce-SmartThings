@@ -21,7 +21,7 @@ Integrate Spruce GEN2 Controller and GEN1 or GEN2 Sensors with SmartThings. Cont
   - Schedule, zone and valve error notifications available
   - Valve health and flow (when used with flow meter)
   - Spruce sensors paired with ST can use the Spruce Connect to report values to the Spruce Cloud.
-  - Optional: Spruce Water on Demand SmartApp, Controller, Manual Schedules or Zones can be set to water at a specific time, or based on Soil Moisture Sensor value
+  - Optional: [*Spruce Water on Demand*](https://github.com/PlaidSystems/Spruce-SmartThings/blob/master/smartapps/plaidsystems/spruce-water-on-demand.src/spruce-water-on-demand.groovy) SmartApp, Controller, Manual Schedules or Zones can be set to water at a specific time, or based on Soil Moisture Sensor value
   
 **Install Overview**
 
