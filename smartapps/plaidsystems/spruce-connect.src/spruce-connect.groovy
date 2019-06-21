@@ -2,6 +2,7 @@
  *  Spruce Web Connect Cloud-to-Cloud
  *  v1.0 - 04/01/18 - convert to cloud-cloud
  *  v1.1 - 06/05/18 - correct IOS error, rename page to pageController
+ *  v1.2 - 06/20/19 - temperature units, add time resume delay for contact
  *
  *  Copyright 2018 Plaid Systems
  *
@@ -83,6 +84,7 @@ def pageController(){
             section("Select Spruce Controller\n to connect with SmartThings") {
             	input(name: "controller", title:"Select Spruce Controller:", type: "enum", required:true, multiple:false, description: "Tap to choose", metadata:[values:select_device])                
     		}
+            section("Spruce-Connect v1.2\n 6.20.2019")
         }
     }    
     else pageDevices()
@@ -94,14 +96,18 @@ def pageDevices(){
       log.debug "pageDevices"
         dynamicPage(name: "pageDevices", uninstall: true, install:true) {
         	if(atomicState.zoneUpdate == true) section("Device changes found, device tiles will be updated! \n\nErrors will occur if devices are assigned to Automations and SmartApps, please remove before updating.\n"){}
-         	section("Select settings for connected devices\nConnected controller: ${settings.controller}\nConnected zones: ${zoneList()}") {            	
-                input "contacts", "capability.contactSensor", title: "Contact sensors will pause or resume water:", required: false, multiple: true
+         	section("Select settings for connected devices\nConnected controller: ${settings.controller}\nConnected zones: ${zoneList()}") {
                 input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['Schedule','Zone','Valve Fault']])
                 input(name: "pause", title:"Turn on to create Spruce Pause control that is accesible from automation routines to pause and resume water", type: 'bool')
             }
             section("SmartThings Spruce Sensors that will report to Spruce Cloud:") {
-                input "sensors", "capability.relativeHumidityMeasurement", title: "Spruce Moisture sensors:", required: false, multiple: true 
+                input "sensors", "capability.relativeHumidityMeasurement", title: "Spruce Moisture sensors:", required: false, multiple: true
             }
+            section("SmartThings Contact Sensors that will pause and resume the schedule:") {
+            	input "contacts", "capability.contactSensor", title: "Contact sensors will pause or resume water:", required: false, multiple: true
+                input "delay", "number", title: "The delay in minutes that water will resume after the contact is closed, default=5, max=119", required: false, range: '0..119'
+            }
+            section("Spruce-Connect v1.2\n 6.20.2019")
         }   
     }    
     else {
@@ -174,6 +180,7 @@ def updated() {
 
 def initialize() {	
     log.debug "initialize"    
+    atomicState.zones_on = 0
     
     if (settings.sensors) getSensors()
     if (settings.contacts) getContacts()
@@ -188,15 +195,15 @@ def initialize() {
 
 //get zone device list
 def getSpruceDevices(){	
-   def zones = []
+   def controllers = []
    
    def tempSwitch = atomicState.switches
    int i=0
    tempSwitch.each{
-   	zones[i] = it.key
+   	controllers[i] = it.key    
     i++
    }   
-   return zones       
+   return controllers       
 }
 
 //sensor subscriptions
@@ -342,9 +349,9 @@ def getControllerList(){
     ]
 
     try{ httpGet(GETparams) { resp ->	
-    	log.debug "${resp.data}"
+    	log.debug "resp-> ${resp.data}"        
         resp.data.each{        	
-        	tempMap = ["${resp.data[it.key]['controller_name']}": it.key]
+            tempMap += ["${resp.data[it.key]['controller_name']}": it.key]
         }        
       }
     }
@@ -499,12 +506,16 @@ def sensorHandler(evt) {
     log.debug "sensorHandler: ${evt.device}, ${evt.name}, ${evt.value}"
     
     def device = atomicState.sensors["${evt.device}"]
-    
-    def uri = "https://api.spruceirrigation.com/v2/"
-    if (evt.name == "humidity") uri += "moisture"    
-    else uri += evt.name
-    
     def value = evt.value
+    def uri = "https://api.spruceirrigation.com/v2/"
+    
+    if (evt.name == "humidity") uri += "moisture"
+    
+    if (evt.name == "temperature"){
+    	uri += "temperature"
+        if (evt.unit == "C") value = evt.value.toInteger() * 9/5 + 32
+    }
+        
     //added for battery
     if (evt.name == "battery") value = evt.value.toInteger() * 5 + 2500
     
@@ -543,7 +554,7 @@ def contactHandler(evt) {
     
     def device = atomicState.contacts["${evt.device}"]    
     def value = evt.value
-    
+        
     def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
     
     log.debug "Found ${childDevice}"
@@ -552,9 +563,12 @@ def contactHandler(evt) {
         log.debug result
         childDevice.generateEvent(result)
     }
-    if (value == 'open') send_pause(0)
-    else send_resume()
     
+    int delay_secs = 0
+    if (settings.delay) delay_secs = settings.delay * 60
+    
+    if (value == 'open') send_pause(0)
+    else runIn(delay_secs, send_resume)
 }
 
 
@@ -586,16 +600,16 @@ def event(){
     def command = params.command
 	def event = command.split(',')
     
-	def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
-    if (childDevice != null){  	
+	def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    if (masterDevice != null){  	
         def scheduleName = getScheduleName(event[2])
         def result = [name: 'status', value: "${event[0]}", descriptionText: "${scheduleName} starting\n${event[1]}", isStateChange: true, displayed: false]
         log.debug result        
-        childDevice.generateEvent(result)
+        masterDevice.generateEvent(result)
         
         def tempManualMap = atomicState.manualMap        
         tempManualMap.each{
-            if ("${tempManualMap[it.key]['scheduleid']}" == "${event[2]}") childDevice.zoneon("${app.id}.${it.key}")
+            if ("${tempManualMap[it.key]['scheduleid']}" == "${event[2]}") masterDevice.zoneon("${app.id}.${it.key}")
         }
     }
     return [error: false, return_value: 1]
@@ -612,16 +626,15 @@ def rain(){
     
     def zoneonoff = command.split(',')
             
-    //def dni = "${app.id}.0"
     def name = 'rainsensor'
     def value = (zoneonoff[1].toInteger() == 1 ? 'on' : 'off')
     def message = "rain sensor is ${value}"
             
-    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
     
-    def result = [name: name, value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
+    def result = [name: name, value: value, descriptionText: "${masterDevice} ${message}", isStateChange: true, displayed: true]
     log.debug result
-    childDevice.generateEvent(result)
+    masterDevice.generateEvent(result)
     
     return [error: false, return_value: 1]
 }
@@ -635,16 +648,15 @@ def pause(){
     
     def zoneonoff = command.split(',')
             
-    //def dni = "${app.id}.0"
     def name = 'pause'
     def value = (zoneonoff[1].toInteger() == 1 ? 'on' : 'off')
     def message = "pause is ${value}"
             
-    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
     
-    def result = [name: name, value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
+    def result = [name: name, value: value, descriptionText: "${masterDevice} ${message}", isStateChange: true, displayed: true]
     log.debug result
-    childDevice.generateEvent(result)
+    masterDevice.generateEvent(result)
     
     return [error: false, return_value: 1]
 }
@@ -671,25 +683,38 @@ def zone_state(){
    	else ks = zoneonoff[1]
 
     def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.${ks}"}
-    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}    
     def name = 'switch'
     def value
     def message
     def gpm
-    def amp
-    
+    def amp    
+        
+    int zone_on = atomicState.zones_on
     switch(zoneonoff[0]) {
         case "zon":            
             value = 'on'
             message = "on"
+            //if (ks != "0")
+            zone_on++
             if (zoneonoff[2].toInteger() != 0) message += " for ${Math.round(zoneonoff[2].toInteger()/60)} mins"            
             break
         case "zoff":
             value = 'off'
-            message = "off"            
+            message = "off"
+            //if (ks != "0")
+            zone_on--
             break        
     }
     
+    if (zone_on < 0) zone_on = 0
+    log.debug "zone_on count: ${zone_on}"
+    /*
+    if (atomicState.zones_on == 0 && zone_on == 1) masterDevice.generateEvent([name: 'switch', value: "on", descriptionText: "${settings.controller} ${message}", isStateChange: true, displayed: true])
+    else if (atomicState.zones_on >= 1 && zone_on == 0) masterDevice.generateEvent([name: 'switch', value: "off", descriptionText: "${settings.controller} ${message}", isStateChange: true, displayed: true])    
+    */
+    atomicState.zones_on = zone_on
+	 
     if (zoneonoff[0] == "zoff" && sz >= 5){
     	gpm = [name: 'gpm', value: "${zoneonoff[3]}", descriptionText: "${childDevice} gpm flow ${zoneonoff[3]}", isStateChange: true, displayed: true]
         amp = [name: 'amp', value: "${zoneonoff[4]}", descriptionText: "${childDevice} valve check ${zoneonoff[4]}", isStateChange: true, displayed: true]
@@ -703,7 +728,7 @@ def zone_state(){
     
     def zoneResult = [name: name, value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
     
-    log.debug result
+    log.debug zoneResult
     childDevice.generateEvent(zoneResult)
     
     def masterResult = [name: name, value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
