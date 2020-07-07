@@ -106,7 +106,7 @@ def pageDevices(){
             section("SmartThings Contact/Motion Sensors that will pause and resume the schedule:") {
             	input "contacts", "capability.contactSensor", title: "Contact sensors will pause or resume water:", required: false, multiple: true
 				input "motions", "capability.motionSensor", title: "Motion sensors will pause or resume water:", required: fales, multiple: true
-                input "delay", "number", title: "The delay in minutes that water will resume after the contact is closed, default=5, max=119", required: false, range: '0..119'
+                input "delay", "number", title: "The delay in minutes that water will resume after the contact is closed or motion stops, default=5, max=119", required: false, range: '0..119'
             }
             section("Spruce-Connect v1.2\n 6.20.2019")
         }   
