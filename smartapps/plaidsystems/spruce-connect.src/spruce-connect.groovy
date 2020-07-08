@@ -32,8 +32,8 @@ definition(
 	//appSetting "clientSecret"
     //appSetting "serverUrl"
     
-    atomicState.clientid = "smartthings-beta"
-    atomicState.clientSecret = "rf1ce71eec8361fdab2253d1d8y819a5"
+    atomicState.clientid = "smartthings"
+    atomicState.clientSecret = "081ce71eec73b1fdad2253d1d88819a5"
 }
 
 //-----------------pages----------------------------
@@ -67,7 +67,7 @@ def controllerSelected(){
 def pageConnect(){
     if(!atomicState.authToken){		
         def redirectUrl = "https://graph.api.smartthings.com/oauth/initialize?appId=${app.id}&access_token=${atomicState.accessToken}&apiServerUrl=${getApiServerUrl()}"
-		
+		log.debug "redirectUrl ${redirectUrl}"
         dynamicPage(name: "pageConnect", title: "Connect Account",  uninstall: false, install:false) {
             section {
                 href url: redirectUrl, style:"embedded", required:false, title:"Connect Spruce Account", image: 'http://www.plaidsystems.com/smartthings/st_spruce_leaf_250f.png', description: "Login to grant access"
@@ -128,7 +128,7 @@ def zoneList(){
     return zoneString;
 }
 
-mappings {
+mappings {  
   path("/event/:command") {
     action: [
       POST: "event"
@@ -890,7 +890,7 @@ def retryInitialRequest(POSTparams) {
 def oauthInitUrl(){
 	// Generate a random ID to use as a our state value. This value will be used to verify the response we get back from the third-party service.
     atomicState.oauthInitState = UUID.randomUUID().toString()
-    //log.debug atomicState.oauthInitState
+    
 	def oauthParams = [
         response_type: "code",
         scope: "basic",
@@ -900,7 +900,10 @@ def oauthInitUrl(){
         redirect_uri: "https://graph.api.smartthings.com/oauth/callback"
     ]
 	def apiEndpoint = "https://app.spruceirrigation.com/oauth"
-    redirect(location: "${apiEndpoint}/authorize?${toQueryString(oauthParams)}")
+    def oAuthInitURL = "${apiEndpoint}/authorize?${toQueryString(oauthParams)}"
+    
+    log.debug "oAuthInitURL ${oAuthInitURL}"
+    redirect(location: "${oAuthInitURL}")
     
 }
 
@@ -914,7 +917,7 @@ def callback() {
 
     def code = params.code
     def oauthState = params.state
-
+	log.debug "callback code ${code} state ${oauthState}"
     // Validate the response from the third party by making sure oauthState == state.oauthInitState as expected
     if (oauthState == atomicState.oauthInitState){
         def tokenParams = [
