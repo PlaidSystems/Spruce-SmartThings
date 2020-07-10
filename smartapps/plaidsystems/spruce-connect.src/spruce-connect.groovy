@@ -856,15 +856,23 @@ def sendPost(POSTparams) {
 	POSTparams.headers = [ 	"Authorization": "Bearer ${atomicState.authToken}"]
     try{
         httpPost(POSTparams){
-            resp -> //resp.data {
-            log.debug "${resp.data}"
+            resp -> 
             if ("${resp.data.error}" == 'true') note('error', "${resp.data.message}")
         }                
     } 
     catch (error) {
-        log.debug "send DB error: $error"        
-        refreshAuthToken()
-        retryInitialRequest(POSTparams)
+        log.debug "post error: $error"
+        def success = false
+		try {
+        	success = refreshAuthToken()    
+        }
+        catch (e){
+        	log.debug "refresh token failed! ${e}"
+        }
+        finally {
+        	log.debug "retry ${success}"
+        	retryInitialRequest(POSTparams)
+        }
     }
    	
 }
@@ -986,6 +994,7 @@ private refreshAuthToken() {
                 if (resp.data) {
                     atomicState.refreshToken = resp.data.refresh_token
                     atomicState.authToken = resp.data.access_token
+                    return true
             	}
                 
         	}
@@ -995,7 +1004,7 @@ private refreshAuthToken() {
         log.debug "token refresh error: $error"
         return false
     }
-    return true
+    //return false
 }
 
 // Example success method
