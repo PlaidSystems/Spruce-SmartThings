@@ -3,7 +3,8 @@
  *  v1.0 - 04/01/18 - convert to cloud-cloud
  *  v1.1 - 06/05/18 - correct IOS error, rename page to pageController
  *  v1.2 - 06/20/19 - temperature units, add time resume delay for contact
- *  v1.3 - 07/10/20 - update OAuth
+ *  v1.3 - 07/08/20 - update OAuth
+ *  v1.4 - 07/10/20 - pull in DW motion sensor additions
  *
  *  Copyright 2018 Plaid Systems
  *
@@ -18,7 +19,7 @@
  *
  */
  
-def version(){return "Spruce-Connect v1.3\n 7.10.2020"}
+def version(){return "Spruce-Connect v1.4\n 7.10.2020"}
     
 definition(
     name: "Spruce Connect",
