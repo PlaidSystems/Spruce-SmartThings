@@ -3,7 +3,8 @@
  *  v1.0 - 04/01/18 - convert to cloud-cloud
  *  v1.1 - 06/05/18 - correct IOS error, rename page to pageController
  *  v1.2 - 06/20/19 - temperature units, add time resume delay for contact
- *  v1.3 - 07/10/20 - update OAuth
+ *  v1.3 - 07/08/20 - update OAuth
+ *  v1.4 - 07/10/20 - pull in DW motion sensor additions
  *
  *  Copyright 2018 Plaid Systems
  *
@@ -18,7 +19,7 @@
  *
  */
  
-def version(){return "Spruce-Connect v1.3\n 7.10.2020"}
+def version(){return "Spruce-Connect v1.4\n 7.10.2020"}
     
 definition(
     name: "Spruce Connect",
@@ -107,9 +108,10 @@ def pageDevices(){
             section("SmartThings Spruce Sensors that will report to Spruce Cloud:") {
                 input "sensors", "capability.relativeHumidityMeasurement", title: "Spruce Moisture sensors:", required: false, multiple: true
             }
-            section("SmartThings Contact Sensors that will pause and resume the schedule:") {
+            section("SmartThings Contact/Motion Sensors that will pause and resume the schedule:") {
             	input "contacts", "capability.contactSensor", title: "Contact sensors will pause or resume water:", required: false, multiple: true
-                input "delay", "number", title: "The delay in minutes that water will resume after the contact is closed, default=5, max=119", required: false, range: '0..119'
+				input "motions", "capability.motionSensor", title: "Motion sensors will pause or resume water:", required: fales, multiple: true
+                input "delay", "number", title: "The delay in minutes that water will resume after the contact is closed or motion stops, default=5, max=119", required: false, range: '0..119'
             }
             section("${version()}")
         }   
@@ -188,6 +190,7 @@ def initialize() {
     
     if (settings.sensors) getSensors()
     if (settings.contacts) getContacts()
+	if (settings.motions) getMotions()
     
     //add devices to web, check for schedules
     if(atomicState.accessToken){
@@ -236,6 +239,19 @@ def getContacts(){
     atomicState.contacts = tempContacts
     
     subscribe(settings.contacts, "contact", contactHandler)    
+}
+
+//contact motions
+def getMotions(){    
+    log.debug "getMotions: " + settings.motions    
+    
+    def tempMotions = [:]
+    settings.motions.each{
+    	tempMotions[it]= (it.device.zigbeeId)
+        }
+    atomicState.motions = tempMotions
+    
+    subscribe(settings.motions, "motion", motionHandler)    
 }
 
 //------------------create and remove child tiles------------------------------
@@ -570,11 +586,38 @@ def contactHandler(evt) {
     int delay_secs = 0
     if (settings.delay) delay_secs = settings.delay * 60
     
-    if (value == 'open') send_pause(0)
+    if (value == 'open'){
+		send_pause(0)
+		unschedule (send_resume)
+	}
     else runIn(delay_secs, send_resume)
 }
 
-
+//motion evts
+def motionHandler(evt) {
+    log.debug "motionHandler: ${evt.device}, ${evt.name}, ${evt.value}"
+    
+    def device = atomicState.motions["${evt.device}"]    
+    def value = evt.value
+        
+    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    
+    log.debug "Found ${childDevice}"
+    if (childDevice != null){    	
+        def result = [name: evt.name, value: value, descriptionText: evt.name, isStateChange: true, displayed: false]
+        log.debug result
+        childDevice.generateEvent(result)
+    }
+    
+    int delay_secs = 0
+    if (settings.delay) delay_secs = settings.delay * 60
+    
+    if (value == 'active'){
+		send_pause(0)
+		unschedule (send_resume)
+	}
+    else runIn(delay_secs, send_resume)
+}
 
 
 //**************************** incoming commands **************************************
@@ -811,11 +854,12 @@ void runAll(runtime){
 }
 
 void send_pause(pausetime){
-	if (pausetime != 0) pausetime = 0;
+	log.debug "send_pause ${pausetime} sec" 
+	if (pausetime < 0) pausetime = 0;
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/pause',
                     body: [
-                        pausetime: pausetime*60
+                        pausetime: pausetime
                     ]
                 ]
 
@@ -823,6 +867,7 @@ void send_pause(pausetime){
 }
 
 void send_resume(){
+	log.debug "send_resume"
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/resume',
                     body: [                        
