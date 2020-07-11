@@ -3,6 +3,7 @@
  *  v1.0 - 04/01/18 - convert to cloud-cloud
  *  v1.1 - 06/05/18 - correct IOS error, rename page to pageController
  *  v1.2 - 06/20/19 - temperature units, add time resume delay for contact
+ *  v1.3 - 07/10/20 - update OAuth
  *
  *  Copyright 2018 Plaid Systems
  *
@@ -16,6 +17,9 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+ 
+def version(){return "Spruce-Connect v1.3\n 7.10.2020"}
+    
 definition(
     name: "Spruce Connect",
     namespace: "plaidsystems",
@@ -32,8 +36,8 @@ definition(
 	//appSetting "clientSecret"
     //appSetting "serverUrl"
     
-    atomicState.clientid = "smartthings-beta"
-    atomicState.clientSecret = "rf1ce71eec8361fdab2253d1d8y819a5"
+    atomicState.clientid = "smartthings"
+    atomicState.clientSecret = "081ce71eec73b1fdad2253d1d88819a5"
 }
 
 //-----------------pages----------------------------
@@ -67,7 +71,7 @@ def controllerSelected(){
 def pageConnect(){
     if(!atomicState.authToken){		
         def redirectUrl = "https://graph.api.smartthings.com/oauth/initialize?appId=${app.id}&access_token=${atomicState.accessToken}&apiServerUrl=${getApiServerUrl()}"
-		
+		log.debug "redirectUrl ${redirectUrl}"
         dynamicPage(name: "pageConnect", title: "Connect Account",  uninstall: false, install:false) {
             section {
                 href url: redirectUrl, style:"embedded", required:false, title:"Connect Spruce Account", image: 'http://www.plaidsystems.com/smartthings/st_spruce_leaf_250f.png', description: "Login to grant access"
@@ -84,7 +88,7 @@ def pageController(){
             section("Select Spruce Controller\n to connect with SmartThings") {
             	input(name: "controller", title:"Select Spruce Controller:", type: "enum", required:true, multiple:false, description: "Tap to choose", metadata:[values:select_device])                
     		}
-            section("Spruce-Connect v1.2\n 6.20.2019")
+            section("${version()}")
         }
     }    
     else pageDevices()
@@ -107,7 +111,7 @@ def pageDevices(){
             	input "contacts", "capability.contactSensor", title: "Contact sensors will pause or resume water:", required: false, multiple: true
                 input "delay", "number", title: "The delay in minutes that water will resume after the contact is closed, default=5, max=119", required: false, range: '0..119'
             }
-            section("Spruce-Connect v1.2\n 6.20.2019")
+            section("${version()}")
         }   
     }    
     else {
@@ -128,7 +132,7 @@ def zoneList(){
     return zoneString;
 }
 
-mappings {
+mappings {  
   path("/event/:command") {
     action: [
       POST: "event"
@@ -537,8 +541,7 @@ def sensorHandler(evt) {
     }
     
     def POSTparams = [
-                    uri: uri,
-                    headers: [ 	"Authorization": "Bearer ${atomicState.authToken}"],
+                    uri: uri,                   
                     body: [
                         deviceid: device,
                         value: value                        
@@ -759,7 +762,6 @@ void zoneOnOff(dni, onoff, level) {
 
     def POSTparams = [
         uri: 'https://api.spruceirrigation.com/v2/zone',
-        headers: [ 	"Authorization": "Bearer ${atomicState.authToken}"],
         body: [
             zone: zone,
             zonestate: onoff,
@@ -787,7 +789,6 @@ void scheduleOnOff(name, onoff){
     
     def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/schedule',
-                    headers: [ 	"Authorization": "Bearer ${atomicState.authToken}"],
                     body: [
                         scheduleID: scheduleID,
                         onoff: onoff
@@ -801,7 +802,6 @@ void scheduleOnOff(name, onoff){
 void runAll(runtime){
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/runall',
-                    headers: [ 	"Authorization": "Bearer ${atomicState.authToken}"],
                     body: [
                         zonetime: runtime
                     ]
@@ -814,7 +814,6 @@ void send_pause(pausetime){
 	if (pausetime != 0) pausetime = 0;
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/pause',
-                    headers: [ 	"Authorization": "Bearer ${atomicState.authToken}"],
                     body: [
                         pausetime: pausetime*60
                     ]
@@ -826,7 +825,6 @@ void send_pause(pausetime){
 void send_resume(){
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/resume',
-                    headers: [ 	"Authorization": "Bearer ${atomicState.authToken}"],
                     body: [                        
                     ]
                 ]
@@ -837,7 +835,6 @@ void send_resume(){
 void send_stop(){	
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/stop',
-                    headers: [ 	"Authorization": "Bearer ${atomicState.authToken}"],
                     body: [                        
                     ]
                 ]
@@ -856,23 +853,32 @@ def note(type, message){
 //************* post ******************
 
 def sendPost(POSTparams) {
-	try{
+	POSTparams.headers = [ 	"Authorization": "Bearer ${atomicState.authToken}"]
+    try{
         httpPost(POSTparams){
-            resp -> //resp.data {
-            log.debug "${resp.data}"
+            resp -> 
             if ("${resp.data.error}" == 'true') note('error', "${resp.data.message}")
         }                
     } 
     catch (error) {
-        log.debug "send DB error: $error"        
-        refreshAuthToken()
-        retryInitialRequest(POSTparams)
+        log.debug "post error: $error"
+        def success = false
+		try {
+        	success = refreshAuthToken()    
+        }
+        catch (e){
+        	log.debug "refresh token failed! ${e}"
+        }
+        finally {
+        	log.debug "retry ${success}"
+        	retryInitialRequest(POSTparams)
+        }
     }
    	
 }
 
 def retryInitialRequest(POSTparams) {
-	POSTparams.headers = [ 	"Authorization": "Bearer ${atomicState.authToken}"]
+	POSTparams.headers = ["Authorization": "Bearer ${atomicState.authToken}"]
     try{
         httpPost(POSTparams){
             resp -> //resp.data {
@@ -890,7 +896,7 @@ def retryInitialRequest(POSTparams) {
 def oauthInitUrl(){
 	// Generate a random ID to use as a our state value. This value will be used to verify the response we get back from the third-party service.
     atomicState.oauthInitState = UUID.randomUUID().toString()
-    //log.debug atomicState.oauthInitState
+    
 	def oauthParams = [
         response_type: "code",
         scope: "basic",
@@ -900,7 +906,10 @@ def oauthInitUrl(){
         redirect_uri: "https://graph.api.smartthings.com/oauth/callback"
     ]
 	def apiEndpoint = "https://app.spruceirrigation.com/oauth"
-    redirect(location: "${apiEndpoint}/authorize?${toQueryString(oauthParams)}")
+    def oAuthInitURL = "${apiEndpoint}/authorize?${toQueryString(oauthParams)}"
+    
+    log.debug "oAuthInitURL ${oAuthInitURL}"
+    redirect(location: "${oAuthInitURL}")
     
 }
 
@@ -914,7 +923,7 @@ def callback() {
 
     def code = params.code
     def oauthState = params.state
-
+	log.debug "callback code ${code} state ${oauthState}"
     // Validate the response from the third party by making sure oauthState == state.oauthInitState as expected
     if (oauthState == atomicState.oauthInitState){
         def tokenParams = [
@@ -928,15 +937,16 @@ def callback() {
                     redirect_uri: "https://graph.api.smartthings.com/oauth/callback"        
                 ]
         ]
-        
+        log.debug tokenParams
         httpPost(tokenParams) { resp ->
+        	log.debug "tokenParams: ${resp.data}"
         	atomicState.refreshToken = resp.data.refresh_token
             atomicState.authToken = resp.data.access_token           
         }
         
         //send access_token to spruce
         if (atomicState.authToken && !atomicState.accessTokenPut) {
-        	atomicState.accessTokenPut = true
+        	
             def accessToken_url = "https://api.spruceirrigation.com/smartthings/accesstoken"
             log.debug accessToken_url
             
@@ -946,18 +956,27 @@ def callback() {
                 body: [
                 		smartthings_token: atomicState.accessToken
                 ]
-            ]            
-            httpPost(accessParams) { resp ->
-            	log.debug resp.data.error
-                if (resp.data.error == false) success()
-                else fail()
-            }           
+            ]
+            
+            try{
+                httpPost(accessParams) { resp ->
+                    log.debug resp.data.error
+                    if (resp.data.error == false){
+                    	atomicState.accessTokenPut = true
+                        success()
+                    }
+                    else fail()
+                }
+            } catch(Exception e){
+                log.error e
+                fail()
+            }
             
         } 
         else fail()
     } 
     else log.error "callback() failed. Validation of state did not match. oauthState != atomicState.oauthInitState"
-    
+    success()
 }
 
 private refreshAuthToken() {
@@ -975,6 +994,7 @@ private refreshAuthToken() {
                 if (resp.data) {
                     atomicState.refreshToken = resp.data.refresh_token
                     atomicState.authToken = resp.data.access_token
+                    return true
             	}
                 
         	}
@@ -984,7 +1004,7 @@ private refreshAuthToken() {
         log.debug "token refresh error: $error"
         return false
     }
-    return true
+    //return false
 }
 
 // Example success method
