@@ -12,14 +12,58 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- -------------5-2018 update---------------
+
+ Version v2.0 5-2021
+ * Convert for new SmartThings app
+
+ Version v1.0 5-2018
  * Spruce Controller wifi master control tile
  * Manual Schedule tiles
- */
  
- metadata {
-	definition (name: 'Spruce wifi master', namespace: 'plaidsystems', author: 'Plaid Systems') {
+ **/
+ 
+import groovy.json.JsonOutput
+import physicalgraph.zigbee.zcl.DataType
+
+//dth version
+def getVERSION() {'v2.0 5-2021'}
+def getDEBUG() {false}
+def getHC_INTERVAL_MINS() {60}
+//zigbee cluster, attribute, identifiers
+def getALARMS_CLUSTER() {0x0009}
+def getBINARY_INPUT_CLUSTER() {0x000F}
+def getON_TIME_ATTRIBUTE() {0x4001}
+def getOFF_WAIT_TIME_ATTRIBUTE() {0x4002}
+def getOUT_OF_SERVICE_IDENTIFIER() {0x0051}
+def getPRESENT_VALUE_IDENTIFIER() {0x0055}
+
+metadata {
+	definition (name: "Spruce Controller", namespace: "plaidsystems", author: "Plaid Systems", mnmn: "SmartThingsCommunity",
+		ocfDeviceType: "x.com.st.d.remotecontroller", mcdSync: true, vid: "2914a12b-504f-344f-b910-54008ba9408f") {
+
+		capability "Actuator"
 		capability "Switch"
+		capability "Sensor"
+		capability "Health Check"
+		capability "heartreturn55003.status"
+		capability "heartreturn55003.controllerState"
+		capability "heartreturn55003.rainSensor"
+		capability "heartreturn55003.valveDuration"
+
+		capability "Configuration"
+		capability "Refresh"
+
+		attribute "status", "string"
+		attribute "controllerState", "string"
+		attribute "rainSensor", "string"
+		attribute "valveDuration", "NUMBER"
+
+		command "setStatus"
+		command "setRainSensor"
+		command "setControllerState"
+		command "setValveDuration"
+
+        //old
         capability "Switch Level"
         capability "Actuator"
         capability "Valve"
@@ -33,99 +77,52 @@
         command "online"
         command "offline"
         command "resume"
-        command "pause"
-        command "setLevel"
-        command "setMoisture"
+        command "pause"        
         command "generateEvent"
         command "update_settings"
         command "activeLabel"
         
 	}
     preferences {
-    	input description: "1.0 5/2018 beta release", displayDuringSetup: false, type: "paragraph", element: "paragraph", title: "Spruce Connect version"
-    	input description: "Zone settings are configured in the Spruce app.\n\nRefresh the configuration changes by opening the Spruce Connect SmartApp and saving.\n\nThe refresh button can be used to update the manual schedule list, but will error if a manual schedule is used in any automations.", displayDuringSetup: false, type: "paragraph", element: "paragraph", title: "Update Settings and Names"
-    }
-    tiles (scale: 2){
-        multiAttributeTile(name:"sliderTile", type: "generic", width:6, height:4) {
-            tileAttribute('device.status', key: 'PRIMARY_CONTROL') {
-                attributeState 'ready', label: 'Ready', icon: 'http://www.plaidsystems.com/smartthings/st_spruce_leaf_225_top.png'
-                attributeState 'active', label: "Active", icon: 'st.Outdoor.outdoor12', backgroundColor: '#46c2e8'
-                //attributeState 'finished', label: 'Finished', icon: 'st.Outdoor.outdoor5', backgroundColor: '#46c2e8'            
-
-                attributeState 'raintoday', label: 'Rain Today', icon: 'http://www.plaidsystems.com/smartthings/st_rain.png', backgroundColor: '#d65fe3'
-                attributeState 'rainy', label: 'Rain', icon: 'http://www.plaidsystems.com/smartthings/st_rain.png', backgroundColor: '#d65fe3'
-                attributeState 'raintom', label: 'Rain Tomorrow', icon: 'http://www.plaidsystems.com/smartthings/st_rain.png', backgroundColor: '#d65fe3'
-
-                attributeState 'skipping', label: 'Skip', icon: 'st.Outdoor.outdoor20', backgroundColor: '#46c2e8'
-                attributeState 'pause', label: 'PAUSE', icon: 'st.contact.contact.open', backgroundColor: '#e86d13'
-                attributeState 'delayed', label: 'Delayed', icon: 'st.contact.contact.open', backgroundColor: '#e86d13'
-
-                attributeState 'disable', label: 'Off', icon: 'st.secondary.off', backgroundColor: '#cccccc'
-                attributeState 'warning', label: 'Warning', icon: 'http://www.plaidsystems.com/smartthings/st_spruce_leaf_225_top_yellow.png'
-                attributeState 'alarm', label: 'Alarm', icon: 'http://www.plaidsystems.com/smartthings/st_spruce_leaf_225_s_red.png', backgroundColor: '#e66565'
-            }
-            
-            tileAttribute ("device.level", key: "SLIDER_CONTROL") {
-                attributeState "level", action:"switch level.setLevel"
-            }
-            tileAttribute("device.tileMessage", key: "SECONDARY_CONTROL") {
-                attributeState "tileMessage", label: '${currentValue}'
-            }
-        }
-        standardTile('switch', 'switch', width:2, height:1, decoration: 'flat') {
-            state 'off', label: 'Start all Zones', action: 'on', icon: 'st.Outdoor.outdoor12', backgroundColor: '#ffffff'
-            state 'on', label: 'stop', action: 'off', icon: 'st.Outdoor.outdoor12', backgroundColor: '#00a0dc'
-		}
-        standardTile('refresh', 'device.switch', inactiveLabel: false, decoration: 'flat') {
-			state 'default', action: 'refresh', icon:'st.secondary.refresh'
-		}
-        standardTile ("amp", "amp", width: 1, height: 1, icon:"st.Health & Wellness.health9") {
-            state "Ok", label:'${name}', icon:"st.Health & Wellness.health9", backgroundColor:"#ffffff"
-            state "Low", label:'${name}', icon:"st.Health & Wellness.health9", backgroundColor:"#f1d801"
-            state "High", label:'${name}', icon:"st.Health & Wellness.health9", backgroundColor:"#e86d13"
-            state "Error", label:'${name}', icon:"st.Health & Wellness.health9", backgroundColor:"#bc2323"
-        }
-        standardTile("contact", "device.contact", width: 1, height: 1, decoration: 'flat') {
-			state "closed", label: '', action: 'pause', icon: "st.contact.contact.closed", decoration: 'flat', backgroundColor: "#ffffff"
-            state "open",   label: '', action: 'resume', icon: "st.contact.contact.open", decoration: 'flat',   backgroundColor: "#e86d13"			
-		}
-        standardTile("rainsensor", "device.rainsensor", decoration: 'flat') {			
-			state "off", label: 'sensor', icon: 'http://www.plaidsystems.com/smartthings/st_drop_on.png'
-            state "on", label: 'sensor', icon: 'http://www.plaidsystems.com/smartthings/st_drop_fill_blue.png'//st_drop_on_blue_small.png'
-            state "disable", label: 'sensor', icon: 'http://www.plaidsystems.com/smartthings/st_drop_slash.png'
-            state "enable", label: 'sensor', icon: 'http://www.plaidsystems.com/smartthings/st_drop_on.png'
-		}
-        valueTile("static_left", "static", width: 1, height: 1) {
-            state "static", label: ""
-        }
-        valueTile("static", "static", width: 4, height: 1) {
-            state "static", label: "Manual Schedules:"
-        }
-        valueTile("static_right", "static", width: 1, height: 1) {
-            state "static", label: ""
-        }
-        childDeviceTile('schedule1', 'schedule1', childTileName: "switch")
-        childDeviceTile('schedule2', 'schedule2', childTileName: "switch")
-        childDeviceTile('schedule3', 'schedule3', childTileName: "switch")
-        childDeviceTile('schedule4', 'schedule4', childTileName: "switch")
-        childDeviceTile('schedule5', 'schedule5', childTileName: "switch")
-        main (["sliderTile"])
-    	details(["sliderTile","refresh","contact","switch","amp","rainsensor","static_left","static","static_right","schedule1","schedule2","schedule3","schedule4","schedule5"])
-    }
-}
-
-def installed(){
-	setLevel(10)
-    setMoisture(0)
-    setPause(closed)
-    setRain(off)
+		//general device settings
+		input title: "Device settings", displayDuringSetup: true, type: "paragraph", element: "paragraph",
+			description: "Zone settings are configured in the Spruce app.\n\nRefresh the configuration changes by opening the Spruce Connect SmartApp and saving."
+		input title: "Version", description: VERSION, displayDuringSetup: true, type: "paragraph", element: "paragraph"
+	}
     
-    update_settings()
+    /*
+    childDeviceTile('schedule1', 'schedule1', childTileName: "switch")
+    childDeviceTile('schedule2', 'schedule2', childTileName: "switch")
+    childDeviceTile('schedule3', 'schedule3', childTileName: "switch")
+    childDeviceTile('schedule4', 'schedule4', childTileName: "switch")
+    childDeviceTile('schedule5', 'schedule5', childTileName: "switch")
+    */  
 }
 
-def update_settings(){
-	log.debug "update_settings master"
-	//get and delete children avoids duplicate children
+def installed(){    
+    initialize()
+}
+
+def uninstalled() {
+	log.debug "uninstalled"
+}
+
+def updated() {
+	log.debug "updated"
+	initialize()
+}
+
+def initialize(){
+	log.debug "initialize master"    
+	sendEvent(name: "controllerState", value: "off", displayed: false)
+	sendEvent(name: "status", value: "Initialize")
+    sendEvent(name: "rainSensor", value: "dry", displayed: false)
+	if (device.latestValue("valveDuration") == null) sendEvent(name: "valveDuration", value: 10)	
+}
+
+//-------------------------schedule devices TODO fix----------------------//
+def createChildDevices() {
+    //get and delete children avoids duplicate children
     
     try {
     	def children = getChildDevices()
@@ -151,6 +148,7 @@ void createScheduleDevices(id, i, schedule, schName){
     //add children
     addChildDevice("Spruce wifi schedule", "${id}.${i}", null, [completedSetup: true, label: "${schName}", isComponent: true, componentName: "schedule${i}", componentLabel: "${schName}"])
 }
+//-------------------------end schedule devices TODO fix----------------------//
 
 
 def generateEvent(Map results) {
@@ -195,16 +193,56 @@ def generateEvent(Map results) {
   
 }
 
+//---------------------custom commands---------------------------------//
+def setStatus(status) {
+	if (DEBUG) log.debug "status ${status}"
+	sendEvent(name: "status", value: status, descriptionText: "Initialized")
+}
+
+def setRainSensor() {
+	if (DEBUG) log.debug "Rain sensor: ${rainSensor}"
+
+	sendEvent(name: "rainSensor", value: "dry", displayed: false)
+}
+
+def setValveDuration(duration) {
+	if (DEBUG) log.debug "Valve Duration set to: ${duration}"
+
+	sendEvent(name: "valveDuration", value: duration, displayed: false)
+}
+
+//controllerState
+def setControllerState(state) {
+	if (DEBUG) log.debug "state ${state}"
+	sendEvent(name: "controllerState", value: state, descriptionText: "Initialized")
+
+	switch(state) {
+		case "on":
+			if (!rainDelay()) {
+				sendEvent(name: "switch", value: "on", displayed: false)
+				sendEvent(name: "status", value: "initialize schedule", descriptionText: "initialize schedule")
+				startSchedule()
+			}
+			break
+		case "off":
+			sendEvent(name: "switch", value: "off", displayed: false)
+			scheduleOff()
+			break
+		case "pause":
+			pause()
+			break
+		case "resume":
+			resume()
+			break
+	}
+}
+
+//---------------------end custom commands---------------------------------//
+
 //set minutes
 def setLevel(percent) {
 	log.debug "setLevel: ${percent}"
 	sendEvent(name: "level", value: percent, displayed: false)
-}
-
-//set moisture
-def setMoisture(percent) {
-	log.debug "setLevel: ${percent}"
-	sendEvent(name: "moisture", value: percent, displayed: false)
 }
 
 //set rainSensor

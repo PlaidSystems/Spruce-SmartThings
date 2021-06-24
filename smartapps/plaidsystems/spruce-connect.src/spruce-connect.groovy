@@ -19,7 +19,7 @@
  *
  */
  
-def version(){return "Spruce-Connect v1.4\n 7.10.2020"}
+def version() {return "Spruce-Connect v1.5\n 5.2021"}
     
 definition(
     name: "Spruce Connect",
@@ -173,7 +173,7 @@ def installed() {
 	log.debug "Installed with settings: ${settings}"    
     state.counter = state.counter ? state.counter + 1 : 1  
     
-    if (state.counter == 1) initialize()    
+    //if (state.counter == 1) initialize()    
 }
 
 def updated() {
@@ -256,6 +256,13 @@ def getMotions(){
 
 //------------------create and remove child tiles------------------------------
 
+//create zone buttons in controller
+def getValveConfiguration(){
+    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+    def tempZoneMap = atomicState.zoneMap
+    masterDevice.createChildDevices(tempZoneMap)
+}
+
 //create zone tiles children
 private void createChildDevices(){
 	log.debug "create zone children ${atomicState.zoneUpdate} with ${app.id}"
@@ -268,16 +275,17 @@ private void createChildDevices(){
         tempSwitch.each{
             master = it.key
         }
-        addChildDevice("Spruce wifi master", "${app.id}.0", null, [completedSetup: true, label: master, isComponent: false, componentName: "wifi", componentLabel: "Wifi"])
-
+        addChildDevice("Spruce Wifi Controller", "${app.id}", null, [completedSetup: true, label: master, isComponent: false, componentName: "wifi", componentLabel: "Wifi"])
+/*
         //Create children   
         def tempZoneMap = atomicState.zoneMap
         tempZoneMap.each{            
             addChildDevice("Spruce wifi zone", "${app.id}.${it.key}", null, [completedSetup: true, label: "${tempZoneMap[it.key]['zone_name']}", isComponent: false, componentName: "wifi", componentLabel: "Wifi"])
         }
+        */
     }
-    if (atomicState.manUpdate == true) child_schedules("${app.id}.0")
-        
+    //if (atomicState.manUpdate == true) child_schedules("${app.id}")
+      
 }
 
 //remove zone tiles children
@@ -285,7 +293,7 @@ private removeChildDevices() {
 	log.debug "remove children"
 	
     //get and delete children avoids duplicate children
-    def children = getChildDevices()  
+    def children = getChildDevices()
     log.debug children
     if(children != null){
         children.each{
@@ -574,7 +582,7 @@ def contactHandler(evt) {
     def device = atomicState.contacts["${evt.device}"]    
     def value = evt.value
         
-    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
     
     log.debug "Found ${childDevice}"
     if (childDevice != null){    	
@@ -600,7 +608,7 @@ def motionHandler(evt) {
     def device = atomicState.motions["${evt.device}"]    
     def value = evt.value
         
-    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
     
     log.debug "Found ${childDevice}"
     if (childDevice != null){    	
@@ -636,7 +644,7 @@ void getsettings(){
         }
     }
         
-    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
     childDevice.update_settings()
 }
 
@@ -646,7 +654,7 @@ def event(){
     def command = params.command
 	def event = command.split(',')
     
-	def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+	def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
     if (masterDevice != null){  	
         def scheduleName = getScheduleName(event[2])
         def result = [name: 'status', value: "${event[0]}", descriptionText: "${scheduleName} starting\n${event[1]}", isStateChange: true, displayed: false]
@@ -676,7 +684,7 @@ def rain(){
     def value = (zoneonoff[1].toInteger() == 1 ? 'on' : 'off')
     def message = "rain sensor is ${value}"
             
-    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
     
     def result = [name: name, value: value, descriptionText: "${masterDevice} ${message}", isStateChange: true, displayed: true]
     log.debug result
@@ -698,7 +706,7 @@ def pause(){
     def value = (zoneonoff[1].toInteger() == 1 ? 'on' : 'off')
     def message = "pause is ${value}"
             
-    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}
+    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
     
     def result = [name: name, value: value, descriptionText: "${masterDevice} ${message}", isStateChange: true, displayed: true]
     log.debug result
@@ -720,16 +728,16 @@ def zone_state(){
     def zoneonoff = command.split(',')
     def sz = zoneonoff.size()
     
-    def ks
+    def ks = zoneonoff[1]
     def scheduleid
     def scheduleName
     def tempSchMap = atomicState.scheduleMap
-    if (zoneonoff[1].toInteger() == 0) ks = "0"
-    else if (zoneonoff[1].toInteger()<10) ks = "0${zoneonoff[1]}"
-   	else ks = zoneonoff[1]
+    //if (zoneonoff[1].toInteger() == 0) ks = "0"
+    //else if (zoneonoff[1].toInteger()<10) ks = "0${zoneonoff[1]}"
+   	//else ks = zoneonoff[1]
 
-    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.${ks}"}
-    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}.0"}    
+    //def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.${ks}"}
+    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}    
     def name = 'switch'
     def value
     def message
@@ -739,14 +747,14 @@ def zone_state(){
     int zone_on = atomicState.zones_on
     switch(zoneonoff[0]) {
         case "zon":            
-            value = 'on'
+            value = 'open'
             message = "on"
             //if (ks != "0")
             zone_on++
             if (zoneonoff[2].toInteger() != 0) message += " for ${Math.round(zoneonoff[2].toInteger()/60)} mins"            
             break
         case "zoff":
-            value = 'off'
+            value = 'closed'
             message = "off"
             //if (ks != "0")
             zone_on--
@@ -760,7 +768,7 @@ def zone_state(){
     else if (atomicState.zones_on >= 1 && zone_on == 0) masterDevice.generateEvent([name: 'switch', value: "off", descriptionText: "${settings.controller} ${message}", isStateChange: true, displayed: true])    
     */
     atomicState.zones_on = zone_on
-	 
+	/* 
     if (zoneonoff[0] == "zoff" && sz >= 5){
     	gpm = [name: 'gpm', value: "${zoneonoff[3]}", descriptionText: "${childDevice} gpm flow ${zoneonoff[3]}", isStateChange: true, displayed: true]
         amp = [name: 'amp', value: "${zoneonoff[4]}", descriptionText: "${childDevice} valve check ${zoneonoff[4]}", isStateChange: true, displayed: true]
@@ -771,11 +779,11 @@ def zone_state(){
         if ("${zoneonoff[3]}" != 'ok') note('Valve Fault', "${childDevice} gpm flow ${zoneonoff[3]}")
         if ("${zoneonoff[4]}" != 'ok') note('Valve Fault', "${childDevice} valve check ${zoneonoff[4]}")
     }
-    
-    def zoneResult = [name: name, value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
+    */
+    def zoneResult = [name: "${ks}", value: value, descriptionText: "Zone${ks} ${message}", isStateChange: true, displayed: true]
     
     log.debug zoneResult
-    childDevice.generateEvent(zoneResult)
+    masterDevice.generateEvent(zoneResult)
     
     def masterResult = [name: name, value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
     if (ks == "0"){
@@ -798,8 +806,8 @@ def zone_state(){
 void zoneOnOff(dni, onoff, level) {
     log.debug "Cloud zoneOnOff ${dni} ${onoff} ${level}"
    	//def zone = 2
-    String zone_dni = "${dni}"
-    def zone = zone_dni[-2..-1]
+    //String zone_dni = "${dni}"
+    def zone = dni.toInteger()//zone_dni[-2..-1]
     
     log.debug zone
 

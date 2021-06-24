@@ -1,0 +1,114 @@
+{
+    "dashboard": {},
+    "detailView": [
+        {
+            "label": "Schedule List",
+            "displayType": "list",
+            "list": {
+                "command": {
+                    "name": "setScheduleList",
+                    "alternatives": [
+                        {
+                            "key": "on",
+                            "value": "on"
+                        },
+                        {
+                            "key": "pause",
+                            "value": "pause"
+						},
+						{
+                            "key": "resume",
+                            "value": "resume"
+                        },
+                        {
+                            "key": "off",
+                            "value": "off"
+                        }
+                    ]
+                },            
+                "state": {
+                    "label": "{{scheduleList.value}}",
+                    "value": "scheduleList.value",
+                    "alternatives": [
+                        {
+                            "key": "on",
+                            "value": "on"
+                        },
+                        {
+                            "key": "pause",
+                            "value": "pause"
+						},
+						{
+                            "key": "resume",
+                            "value": "resume"
+                        },
+                        {
+                            "key": "off",
+                            "value": "off"
+                        }
+                    ]
+                }
+			}
+        }
+    ],
+    "automation": {
+        "conditions": [
+			{
+                "label": "Controller State",
+                "displayType": "list",
+                "list": {
+                    "label": "Controller State",
+                    "value": "scheduleList.value",
+                    "alternatives": [
+                        {
+                            "key": "on",
+                            "value": "on"
+                        },
+                        {
+                            "key": "pause",
+                            "value": "pause"
+						},
+						{
+                            "key": "resume",
+                            "value": "resume"
+                        },
+                        {
+                            "key": "off",
+                            "value": "off"
+                        }
+                    ]
+                }
+            }
+		],
+        "actions": [
+            {
+                "label": "Controller State",
+                "displayType": "list",
+                "list": {
+                    "label": "Controller State",
+                    "command": "setScheduleList",
+                    "alternatives": [
+                        {
+                            "key": "on",
+                            "value": "on"
+                        },
+                        {
+                            "key": "pause",
+                            "value": "pause"
+						},
+						{
+                            "key": "resume",
+                            "value": "resume"
+                        },
+                        {
+                            "key": "off",
+                            "value": "off"
+                        }
+                    ]
+                }
+            }
+		]
+    },
+    "id": "heartreturn55003.scheduleList",
+    "version": 1
+}
