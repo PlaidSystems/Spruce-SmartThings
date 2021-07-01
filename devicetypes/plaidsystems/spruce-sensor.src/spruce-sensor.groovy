@@ -14,7 +14,8 @@
  *
  
  -------6/2021 Updates--------
- -Update for 2021 SmartThings App
+ - Update for 2021 SmartThings App
+ - Add Signal Strength
  
  */
 
@@ -28,14 +29,15 @@ def getHC_INTERVAL_MINS() {60}
 
 metadata {
 	definition (name: "Spruce Sensor Test V3", namespace: "plaidsystems", author: "Plaid Systems", mnmn: "SmartThingsCommunity",
-    	mcdSync: true, vid: "4cff4731-67ce-310b-ada0-4d8e169a6df0") {
+    	mcdSync: true, vid: "02dc7702-2bbd-3dc0-bfc5-fb168cbca308") {
 		
 		capability "Configuration"
 		capability "Battery"
         capability "Relative Humidity Measurement"
         capability "Temperature Measurement"
         capability "Sensor"
-        capability "Health Check"        
+        capability "Health Check"
+        capability "Signal Strength"
         
         command "resetHumidity"
         command "refresh"
@@ -59,9 +61,16 @@ metadata {
 }
 
 def parse(String description) {
-	log.debug "Parse description $description config: ${device.latestValue('configuration')} interval: $interval"      
-    log.debug device.getDataValue("model")
+	log.debug "Parse description $description config: ${device.latestValue('configuration')} interval: $interval"
+    //log.debug device.getDataValue("model")
+    
+    getSignalStrength() 
+    
     Map map = [:]
+    
+    log.debug "description is $description"
+	def cluster = zigbee.parseDescriptionAsMap(description)
+	log.debug "descMap is $cluster"
     
     if (description?.startsWith('catchall:')) {
 		map = parseCatchAllMessage(description)
@@ -84,14 +93,21 @@ def parse(String description) {
     
 }
 
-
+def getSignalStrength() {
+	def meshInfo = device.getDataValue("meshInfo") 
+    def results = new groovy.json.JsonSlurper().parseText(meshInfo)
+    log.debug "RSSI: ${results.metrics.lastRSSI} LQI: ${results.metrics.lastLQI}"
+    
+    sendEvent(name: 'rssi', value: results.metrics.lastRSSI)
+	sendEvent(name: 'lqi', value: results.metrics.lastLQI)    
+}
 
 private Map parseCatchAllMessage(String description) {
     Map resultMap = [:]
     def linkText = getLinkText(device)
 	//log.debug "Catchall"
     def descMap = zigbee.parse(description)
-    
+    log.debug "catchall ${descMap}"
     //check humidity configuration is complete
     if (descMap.command == 0x07 && descMap.clusterId == 0x0405){    	
         def configInterval = 10
@@ -175,7 +191,9 @@ private Map getHumidityResult(value) {
         }
     else if (((compare < minHumValue) || (minHumValue <= 2)) && (compare != 0)) {
         sendEvent(name: 'minHum', value: value, unit: '%', descriptionText: "${linkText} soil moisture low is ${value}%")
-        }    
+        }
+        
+        
     
     return [
     	name: 'humidity',
@@ -241,6 +259,7 @@ def resetHumidity(){
     def maxHumValue = 0
     sendEvent(name: 'minHum', value: minHumValue, unit: '%', descriptionText: "${linkText} min soil moisture reset to ${minHumValue}%")
     sendEvent(name: 'maxHum', value: maxHumValue, unit: '%', descriptionText: "${linkText} max soil moisture reset to ${maxHumValue}%")
+    
 }	
 
 def setConfig(){
