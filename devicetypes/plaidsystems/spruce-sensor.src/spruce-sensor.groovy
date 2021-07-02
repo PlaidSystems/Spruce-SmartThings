@@ -62,21 +62,27 @@ metadata {
 
 // Parse incoming device messages to generate events
 def parse(description) {
-	if (DEBUG) log.debug "Parse description $description config: ${device.latestValue('configuration')} interval: $interval"    
+	//if (DEBUG) log.debug "Parse description $description config: ${device.latestValue('configuration')} interval: $interval"    
     
     getSignalStrength() 
     
     def map = zigbee.parseDescriptionAsMap(description)
-	if (map.raw) log.debug "map raw ${map}"
-    
-    if (isSupportedDescription(description)) {
+    log.debug "description: $description"
+	
+    if (map.raw) {
+    	log.debug "map raw ${map}"
+        map = parseCatchAllMessage(description)
+    }    
+    else if (isSupportedDescription(description)) {
     	log.debug "supported description: $description"
         map = parseCustomMessage(description)
     }    
     else if (description?.startsWith('catchall:')) {
-		map = parseCatchAllMessage(description)
+		log.debug "catchall ${description}"
+        map = parseCatchAllMessage(description)
 	}
 	else if (description?.startsWith('read attr -')) {
+    	log.debug "read attr - ${description}"
 		map = parseReportAttributeMessage(description)
 	}
     
@@ -96,8 +102,9 @@ private Map parseCatchAllMessage(String description) {
     Map resultMap = [:]
     def linkText = getLinkText(device)
 	//log.debug "Catchall"
-    def descMap = zigbee.parse(description)
+    def descMap = zigbee.parseDescriptionAsMap(description)
     log.debug "catchall ${descMap}"
+    
     //check humidity configuration is complete
     if (descMap.command == 0x07 && descMap.clusterId == 0x0405){    	
         def configInterval = 10
@@ -157,11 +164,12 @@ private Map parseCustomMessage(String description) {
 			log.error "invalid humidity: ${pct}"
 		}    
 	}
+    
 	return resultMap
 }
 
 
-
+//----------------------event values-------------------------------//
 
 private Map getHumidityResult(value) {
     def linkText = getLinkText(device)
