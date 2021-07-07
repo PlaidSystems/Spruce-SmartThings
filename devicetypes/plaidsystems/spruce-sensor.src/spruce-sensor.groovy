@@ -172,6 +172,7 @@ private Map parseCustomMessage(String description) {
 //----------------------event values-------------------------------//
 
 private Map getHumidityResult(value) {
+    log.debug "Humidity: $value"
     def linkText = getLinkText(device)
     def maxHumValue = 0
     def minHumValue = 0
@@ -185,12 +186,11 @@ private Map getHumidityResult(value) {
         }
     else if (((compare < minHumValue) || (minHumValue <= 2)) && (compare != 0)) {
         sendEvent(name: 'minHum', value: value, unit: '%', descriptionText: "${linkText} soil moisture low is ${value}%")
-        }
-        
+        }        
         
     
     return [
-    	name: 'humidity',
+    	name: "humidity",
     	value: value,
     	unit: '%',
         descriptionText: "${linkText} soil moisture is ${value}%"
@@ -219,8 +219,9 @@ private Map getTemperatureResult(value) {
 		value = v + offset        
 	}
 	def descriptionText = "${linkText} is ${value}°${temperatureScale}"
-	return [
-		name: 'temperature',
+	
+    return [
+		name: "temperature",
 		value: value,
 		descriptionText: descriptionText,
 		unit: temperatureScale
@@ -228,23 +229,22 @@ private Map getTemperatureResult(value) {
 }
 
 private Map getBatteryResult(value) {
-	log.debug 'Battery'
-	def linkText = getLinkText(device)
-        
-    def result = [
-    	name: 'battery'
-    ]
+	log.debug "Battery: $value"
+	def linkText = getLinkText(device)    
     	
 	def min = 2500   
 	def percent = ((Integer.parseInt(value, 16) - min) / 5)
 	percent = Math.max(0, Math.min(percent, 100.0))
-    result.value = Math.round(percent)
+    value = Math.round(percent)
     
-    def descriptionText
-    if (percent < 10) result.descriptionText = "${linkText} battery is getting low $percent %."
-	else result.descriptionText = "${linkText} battery is ${result.value}%"
+    def descriptionText = "${linkText} battery is ${result.value}%"
+    if (percent < 10) descriptionText = "${linkText} battery is getting low $percent %."
 	
-	return result
+	return [
+		name: "battery",
+		value: value,
+		descriptionText: descriptionText
+	]
 }
 
 def getSignalStrength() {
@@ -265,7 +265,8 @@ def installed() {
 
 //when device preferences are changed
 def updated() {	
-    log.debug "device updated"
+    if (DEBUG) log.debug "device updated"
+    
     if (!device.latestValue('configuration')) configure()
     else if (device.latestValue('configuration').toInteger() != interval && interval != null) {    	
             sendEvent(name: 'configuration',value: 0, descriptionText: "Settings changed and will update at next report. Measure interval set to ${interval} mins")
@@ -297,8 +298,7 @@ def intervalUpdate() {
 }
 
 //configure
-def configure() {    
-
+def configure() {
     return reporting() + refresh()    
 }
 
