@@ -23,7 +23,7 @@ import groovy.json.JsonOutput
 import physicalgraph.zigbee.zcl.DataType
 
 //dth version
-def getVERSION() {'v1.0 6-2021'}
+def getVERSION() {"v1.0 6-2021"}
 def getDEBUG() {true}
 def getHC_INTERVAL_MINS() {60}
 
@@ -31,16 +31,16 @@ metadata {
 	definition (name: "Spruce Sensor Test V3", namespace: "plaidsystems", author: "Plaid Systems", mnmn: "SmartThingsCommunity",
     	mcdSync: true, vid: "02dc7702-2bbd-3dc0-bfc5-fb168cbca308") {
 		
-		capability "Sensor"        
-        
+		capability "Sensor"
         capability "Temperature Measurement"
         capability "Relative Humidity Measurement"
-        capability "Battery"
-        
+        capability "Battery"        
         capability "Signal Strength"
         capability "Health Check"
         capability "Configuration"
 		capability "Refresh"
+        
+        attribute "reportingInterval", "NUMBER"
         
         //new release
 		fingerprint manufacturer: "PLAID SYSTEMS", model: "PS-SPRZMS-01", zigbeeNodeType: "SLEEPY_END_DEVICE", deviceJoinName: "Spruce Irrigation Sensor"
@@ -62,37 +62,34 @@ metadata {
 
 // Parse incoming device messages to generate events
 def parse(description) {
-	//if (DEBUG) log.debug "Parse description $description config: ${device.latestValue('configuration')} interval: $interval"    
+	if (DEBUG) log.debug "Parse description $description config: ${device.latestValue("configuration")} interval: $interval"    
     
     getSignalStrength() 
     
     def map = zigbee.parseDescriptionAsMap(description)
-    log.debug "description: $description"
 	
     if (map.raw) {
     	log.debug "map raw ${map}"
         map = parseCatchAllMessage(description)
-    }    
+    }
+    else if (description?.startsWith("read attr -")) {
+    	log.debug "read attr - ${description}"
+		map = parseReportAttributeMessage(description)
+	}   
     else if (isSupportedDescription(description)) {
     	log.debug "supported description: $description"
         map = parseCustomMessage(description)
     }    
-    else if (description?.startsWith('catchall:')) {
+    else if (description?.startsWith("catchall:")) {
 		log.debug "catchall ${description}"
         map = parseCatchAllMessage(description)
 	}
-	else if (description?.startsWith('read attr -')) {
-    	log.debug "read attr - ${description}"
-		map = parseReportAttributeMessage(description)
-	}
-    
+	
+    log.debug "map: $map"
     def result = map ? createEvent(map) : null
  	
-    //check in configuration change
-    if (!device.latestValue('configuration')) result = ping()
-    if (device.latestValue('configuration').toInteger() != interval && interval != null) {  	
-        result = ping()            
-    }
+    //check in configuration change    
+    if (isIntervalChange()) result = ping()    
  	
     log.debug "result: $result"
     return result    
@@ -100,18 +97,28 @@ def parse(description) {
 
 private Map parseCatchAllMessage(String description) {
     Map resultMap = [:]
-    def linkText = getLinkText(device)
-	//log.debug "Catchall"
-    def descMap = zigbee.parseDescriptionAsMap(description)
-    log.debug "catchall ${descMap}"
+    def linkText = getLinkText(device)	
+    def map = zigbee.parseDescriptionAsMap(description)
+    
+    log.debug "${map.command} ${map.clusterId}"
     
     //check humidity configuration is complete
-    if (descMap.command == 0x07 && descMap.clusterId == 0x0405){    	
+    if (map.command == "07" && map.clusterId == "0405"){    	
         def configInterval = 10
         if (interval != null) configInterval = interval        
-        sendEvent(name: 'configuration',value: configInterval, descriptionText: "Configuration Successful")        
+        sendEvent(name: "reportingInterval", value: configInterval, descriptionText: "Configuration Successful")        
         if (DEBUG) log.debug "config complete"
     }
+    else if (map.clusterId == 0x0405) {
+        return getHumidityResult(map.value);
+    }
+    else if (map.clusterId == 0x0402) {
+        return getTemperatureResult(map.value);
+    }
+    else if (map.clusterId == 0x0001) {
+        return getBatteryResult(map.value);
+    }
+        /*
     else if (descMap.command == 0x0001){
         //zigbee.convertHexToInt  
     	def hexString = "${hex(descMap.data[5])}" + "${hex(descMap.data[4])}"
@@ -129,15 +136,14 @@ private Map parseCatchAllMessage(String description) {
 
         }
         else return null
-    }
-    else return null 
-    
-    return resultMap
+    }*/
+    return null
+
 }    
     
 private Map parseReportAttributeMessage(String description) {	
     def descMap = parseDescriptionAsMap(description)
-	log.debug "Desc Map: $descMap"
+	//log.debug "parseReportAttributeMessage: $descMap"
     log.debug "Report Attributes"
  
 	Map resultMap = [:]
@@ -150,12 +156,12 @@ private Map parseReportAttributeMessage(String description) {
 private Map parseCustomMessage(String description) {
 	Map resultMap = [:]  
         
-	log.debug "parseCustom"
-	if (description?.startsWith('temperature: ')) {
+	log.debug "parseCustomMessage"
+	if (description?.startsWith("temperature: ")) {
 		def value = zigbee.parseHATemperatureValue(description, "temperature: ", getTemperatureScale())
 		resultMap = getTemperatureResult(value)
 	}
-	else if (description?.startsWith('humidity: ')) {
+	else if (description?.startsWith("humidity: ")) {
 		def pct = (description - "humidity: " - "%").trim()
 		if (pct.isNumber()) {        	
             def value = Math.round(new BigDecimal(pct)).toString()
@@ -172,45 +178,19 @@ private Map parseCustomMessage(String description) {
 //----------------------event values-------------------------------//
 
 private Map getHumidityResult(value) {
-    log.debug "Humidity: $value"
+    if (DEBUG) log.debug "Humidity: $value"
     def linkText = getLinkText(device)
-    def maxHumValue = 0
-    def minHumValue = 0
-    if (device.currentValue("maxHum") != null) maxHumValue = device.currentValue("maxHum").toInteger()
-    if (device.currentValue("minHum") != null) minHumValue = device.currentValue("minHum").toInteger()
-    log.debug "Humidity max: ${maxHumValue} min: ${minHumValue}"
-    def compare = value.toInteger()
-    
-    if (compare > maxHumValue) {
-        sendEvent(name: 'maxHum', value: value, unit: '%', descriptionText: "${linkText} soil moisture high is ${value}%")
-        }
-    else if (((compare < minHumValue) || (minHumValue <= 2)) && (compare != 0)) {
-        sendEvent(name: 'minHum', value: value, unit: '%', descriptionText: "${linkText} soil moisture low is ${value}%")
-        }        
-        
     
     return [
     	name: "humidity",
     	value: value,
-    	unit: '%',
+    	unit: "%",
         descriptionText: "${linkText} soil moisture is ${value}%"
     ]
 }
 
-
-
-def getTemperature(value) {
-	def celsius = (Integer.parseInt(value, 16).shortValue()/100)
-    //log.debug "Report Temp $value : $celsius C"
-	if(getTemperatureScale() == "C"){
-		return celsius
-	} else {
-		return celsiusToFahrenheit(celsius) as Integer
-	}
-}
-
 private Map getTemperatureResult(value) {
-	log.debug "Temperature: $value"
+	if (DEBUG) log.debug "Temperature: $value"
 	def linkText = getLinkText(device)
         
 	if (tempOffset) {
@@ -229,7 +209,7 @@ private Map getTemperatureResult(value) {
 }
 
 private Map getBatteryResult(value) {
-	log.debug "Battery: $value"
+	if (DEBUG) log.debug "Battery: $value"
 	def linkText = getLinkText(device)    
     	
 	def min = 2500   
@@ -252,8 +232,8 @@ def getSignalStrength() {
     def results = new groovy.json.JsonSlurper().parseText(meshInfo)
     //if (DEBUG) log.debug "RSSI: ${results.metrics.lastRSSI} LQI: ${results.metrics.lastLQI}"
     
-    sendEvent(name: 'rssi', value: results.metrics.lastRSSI)
-	sendEvent(name: 'lqi', value: results.metrics.lastLQI)    
+    sendEvent(name: "rssi", value: results.metrics.lastRSSI)
+	sendEvent(name: "lqi", value: results.metrics.lastLQI)    
 }
 
 //----------------------configuration-------------------------------//
@@ -267,35 +247,55 @@ def installed() {
 def updated() {	
     if (DEBUG) log.debug "device updated"
     
-    if (!device.latestValue('configuration')) configure()
-    else if (device.latestValue('configuration').toInteger() != interval && interval != null) {    	
-            sendEvent(name: 'configuration',value: 0, descriptionText: "Settings changed and will update at next report. Measure interval set to ${interval} mins")
+    //if (!device.latestValue("configuration")) configure()
+    //else 
+    if (isIntervalChange()) {    	
+        sendEvent(name: "reportingInterval", value: 0, descriptionText: "Settings changed and will update at next report. Measure interval set to ${interval} mins")
     }
 
     // Device-Watch every 62mins or interval + 120s
-    def reportingInterval  = interval * 60 + 2 * 60
-    if (reportingInterval < 3720) reportingInterval = 3720
-    sendEvent(name: "checkInterval", value: reportingInterval, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
+    def reportingIntervalSeconds  = interval * 60 + 2 * 60
+    if (reportingIntervalSeconds < 3720) reportingIntervalSeconds = 3720
+    sendEvent(name: "checkInterval", value: reportingIntervalSeconds, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
+}
+
+//has interval been updated
+def isIntervalChange() {
+    //log.debug "isIntervalChange ${interval} ${device.latestValue("reportingInterval")}"
+    return (interval != device.latestValue("reportingInterval"))    
 }
 
 //ping
 def ping() {
 	if (DEBUG) log.debug "device health ping"
 	
+    /*
     List cmds = []
-    if (!device.latestValue('configuration')) cmds += configure()
-    else if (device.latestValue('configuration').toInteger() != interval && interval != null) { 
+    if (!device.latestValue("configuration")) cmds += configure()
+    else if (device.latestValue("configuration").toInteger() != interval && interval != null) { 
     	cmds += intervalUpdate()
     }
 
     return cmds?.collect { new physicalgraph.device.HubAction(it) }    
+    */
+
+    //if (device.latestValue("configuration").toInteger() != interval && interval != null) return reporting()
+    
+    List cmds = []
+    
+    if (isIntervalChange()) cmds = reporting()
+    else cmds = refresh()
+
+    return cmds?.collect { new physicalgraph.device.HubAction(it) } 
 }
 
+/*
 //update intervals
 def intervalUpdate() {
     //log.debug device.getDataValue("model")
 	return reporting()
 }
+*/
 
 //configure
 def configure() {
@@ -328,8 +328,4 @@ def refresh() {
     refreshCmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0, [destEndpoint: 1])
 
     return refreshCmds
-}
-
-private hex(value) {
-	new BigInteger(Math.round(value).toString()).toString(16)
 }
