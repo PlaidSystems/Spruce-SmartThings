@@ -33,12 +33,6 @@
             "capability": "battery",
             "version": 1,
             "values": []
-        },
-        {
-            "component": "main",
-            "capability": "signalStrength",
-            "version": 1,
-            "values": []
         }
     ],
     "automation": {
@@ -62,12 +56,6 @@
                 "capability": "battery",
                 "version": 1,
                 "values": []
-            },
-            {
-                "component": "main",
-                "capability": "signalStrength",
-                "version": 1,
-                "values": []
             }
         ],
         "actions": [
@@ -88,12 +76,6 @@
             {
                 "component": "main",
                 "capability": "battery",
-                "version": 1,
-                "values": []
-            },
-            {
-                "component": "main",
-                "capability": "signalStrength",
                 "version": 1,
                 "values": []
             }
