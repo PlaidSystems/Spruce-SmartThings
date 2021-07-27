@@ -1,12 +1,7 @@
 /**
- *  Spruce Web Connect Cloud-to-Cloud
- *  v1.0 - 04/01/18 - convert to cloud-cloud
- *  v1.1 - 06/05/18 - correct IOS error, rename page to pageController
- *  v1.2 - 06/20/19 - temperature units, add time resume delay for contact
- *  v1.3 - 07/08/20 - update OAuth
- *  v1.4 - 07/10/20 - pull in DW motion sensor additions
+ *  Spruce Connect Cloud-to-Cloud
  *
- *  Copyright 2018 Plaid Systems
+ *  Copyright 2021 Plaid Systems
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -17,15 +12,21 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- */
  
-def version() {return "Spruce-Connect v1.5\n 5.2021"}
+ Version v1.5 
+ * update for 2021 app
+ * remove componentName and componentLabel from childDevice FIXED new app issues
+ 
+ **/
+ 
+def version() {"Spruce-Connect v1.5\n 7.2021"}
+def getDEBUG() {true}
     
 definition(
     name: "Spruce Connect",
     namespace: "plaidsystems",
     author: "Plaid Systems",
-    description: "Connect Spruce Controller and Sensors to Samsung SmartThings",
+    description: "Connect Spruce Gen2 Controller and Sensors to Samsung SmartThings",
     category: "",
     iconUrl: "http://www.plaidsystems.com/smartthings/st_spruce_leaf_250f.png",
     iconX2Url: "http://www.plaidsystems.com/smartthings/st_spruce_leaf_250f.png",
@@ -54,11 +55,9 @@ def authPage(){
     if(!atomicState.accessToken) atomicState.accessToken = createAccessToken()	//set = so token is saved to atomicState 
     
     if(!atomicState.authToken){
-    	log.debug "pageConnect"
-		pageConnect()
+    	pageConnect()
     }
-    else if (!controllerSelected()){
-    	log.debug "pageController"
+    else if (!controllerSelected()){    	
     	pageController()
     }
     else pageDevices()
@@ -72,7 +71,7 @@ def controllerSelected(){
 def pageConnect(){
     if(!atomicState.authToken){		
         def redirectUrl = "https://graph.api.smartthings.com/oauth/initialize?appId=${app.id}&access_token=${atomicState.accessToken}&apiServerUrl=${getApiServerUrl()}"
-		log.debug "redirectUrl ${redirectUrl}"
+		if (DEBUG) log.debug "redirectUrl ${redirectUrl}"
         dynamicPage(name: "pageConnect", title: "Connect Account",  uninstall: false, install:false) {
             section {
                 href url: redirectUrl, style:"embedded", required:false, title:"Connect Spruce Account", image: 'http://www.plaidsystems.com/smartthings/st_spruce_leaf_250f.png', description: "Login to grant access"
@@ -97,13 +96,12 @@ def pageController(){
 
 def pageDevices(){
 	if (atomicState.authToken && controllerSelected() && getControllerSettings()){
-      log.debug atomicState.zoneUpdate
-      log.debug "pageDevices"
+      if (DEBUG) log.debug atomicState.zoneUpdate
+      if (DEBUG) log.debug "pageDevices"
         dynamicPage(name: "pageDevices", uninstall: true, install:true) {
         	if(atomicState.zoneUpdate == true) section("Device changes found, device tiles will be updated! \n\nErrors will occur if devices are assigned to Automations and SmartApps, please remove before updating.\n"){}
          	section("Select settings for connected devices\nConnected controller: ${settings.controller}\nConnected zones: ${zoneList()}") {
-                input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['Schedule','Zone','Valve Fault']])
-                input(name: "pause", title:"Turn on to create Spruce Pause control that is accesible from automation routines to pause and resume water", type: 'bool')
+                input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['Schedule','Zone','Valve Fault']])                
             }
             section("SmartThings Spruce Sensors that will report to Spruce Cloud:") {
                 input "sensors", "capability.relativeHumidityMeasurement", title: "Spruce Moisture sensors:", required: false, multiple: true
@@ -123,11 +121,11 @@ def pageDevices(){
 }
 
 def zoneList(){
-	def tempZoneMap = atomicState.zoneMap
+	def zoneMap = atomicState.zoneMap
     def zoneString = ""
-    tempZoneMap.sort().each{
+    zoneMap.sort().each{
         def zone_name = "Zone ${it.key}"
-        if ("${tempZoneMap[it.key]['zone_name']}" != 'null') zone_name = "${tempZoneMap[it.key]['zone_name']}"
+        if ("${zoneMap[it.key]['zone_name']}" != 'null') zone_name = "${zoneMap[it.key]['zone_name']}"
     	zoneString += zone_name
         zoneString += ","
     }
@@ -171,17 +169,13 @@ mappings {
 
 def installed() {
 	log.debug "Installed with settings: ${settings}"    
-    state.counter = state.counter ? state.counter + 1 : 1  
-    
-    //if (state.counter == 1) initialize()    
+    initialize()
 }
 
 def updated() {
 	log.debug "Updated with settings: ${settings}"	
-	if (state.counter == 1){
-    	unsubscribe()
-    	initialize()
-        }
+	unsubscribe()
+	initialize()
 }
 
 def initialize() {	
@@ -193,8 +187,7 @@ def initialize() {
 	if (settings.motions) getMotions()
     
     //add devices to web, check for schedules
-    if(atomicState.accessToken){
-    	log.debug getApiServerUrl()
+    if(atomicState.accessToken){    	
         addDevices()
     	createChildDevices()        
 	}    
@@ -258,33 +251,31 @@ def getMotions(){
 
 //create zone buttons in controller
 def getValveConfiguration(){
-    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-    def tempZoneMap = atomicState.zoneMap
-    masterDevice.createChildDevices(tempZoneMap)
+    def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+    def zoneMap = atomicState.zoneMap
+    parentDevice.createChildDevices(zoneMap)
 }
 
 //create zone tiles children
 private void createChildDevices(){
 	log.debug "create zone children ${atomicState.zoneUpdate} with ${app.id}"
-    if(atomicState.zoneUpdate == true){
-    	removeChildDevices()
+    
+    
+
+    //if(atomicState.zoneUpdate == true){
+    	//removeChildDevices()
     
         //get Spruce Controller Name
-        def master
+        def controllerLabel
         def tempSwitch = atomicState.switches
         tempSwitch.each{
-            master = it.key
+            controllerLabel = it.key
         }
-        addChildDevice("Spruce Wifi Controller", "${app.id}", null, [completedSetup: true, label: master, isComponent: false, componentName: "wifi", componentLabel: "Wifi"])
-/*
-        //Create children   
-        def tempZoneMap = atomicState.zoneMap
-        tempZoneMap.each{            
-            addChildDevice("Spruce wifi zone", "${app.id}.${it.key}", null, [completedSetup: true, label: "${tempZoneMap[it.key]['zone_name']}", isComponent: false, componentName: "wifi", componentLabel: "Wifi"])
-        }
-        */
-    }
-    //if (atomicState.manUpdate == true) child_schedules("${app.id}")
+
+        def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+        if (!parentDevice) addChildDevice("Spruce Wifi Controller", "${app.id}", null, [completedSetup: true, label: controllerLabel, isComponent: false])
+        else getValveConfiguration()
+    //}   
       
 }
 
@@ -294,7 +285,7 @@ private removeChildDevices() {
 	
     //get and delete children avoids duplicate children
     def children = getChildDevices()
-    log.debug children
+    if (DEBUG) log.debug children
     if(children != null){
         children.each{
         	deleteChildDevice(it.deviceNetworkId)
@@ -302,43 +293,14 @@ private removeChildDevices() {
     }       
 }
 
-//add child device tiles to master
-def child_schedules(dni){
-	log.debug "get child tiles for master"
-	def childDevice = childDevices.find{it.deviceNetworkId == dni}
-    log.debug "${childDevice}"
-    
-    if(settings.pause == true) childDevice.createScheduleDevices("${app.id}", 99, 0, "Spruce Pause")
-    
-    //add manual schedules
-    def manualschs = atomicState.manualMap    
-    manualschs.each{        
-    	childDevice.createScheduleDevices("${app.id}", it.key, manualschs[it.key]["scheduleid"], manualschs[it.key]["name"])        
-        }
-}
-
-//add zone settings to child tile
-def child_zones(dni){
-	def childDevice = childDevices.find{it.deviceNetworkId == dni}
-    log.debug "${childDevice.deviceNetworkId}"
-        
-    def tempZoneMap = atomicState.zoneMap    
-    tempZoneMap.each{    	
-        if("${app.id}.${it.key}" == childDevice.deviceNetworkId){
-        	log.debug it.key
-            childDevice.childSettings(it.key, tempZoneMap[it.key])
-        }
-    }    
-}
-
 
 //add devices to spruce webapp
 def addDevices(){	
     //add sensors to web
     def key = atomicState.authToken
-    def tempSensorMap = atomicState.sensors
-    tempSensorMap.each{
-    	log.debug "Add Sensor to DB ${it.key}"
+    def sensorMap = atomicState.sensors
+    sensorMap.each{
+    	if (DEBUG) log.debug "Add Sensor to DB ${it.key}"
     	def POSTparams = [
             uri: "https://api.spruceirrigation.com/v2/sensor",
             headers: [ 	"Authorization": "Bearer ${key}"],
@@ -367,26 +329,25 @@ def addDevices(){
 //get controller list
 def getControllerList(){
 	def key = atomicState.authToken
-    def tempMap = [:]
+    def respMap = [:]
     def newuri =  "https://api.spruceirrigation.com/v2/controllers"    
-    log.debug newuri
-    
+        
     def GETparams = [
         uri: newuri,		
         headers: [ 	"Authorization": "Bearer ${key}"],
     ]
 
     try{ httpGet(GETparams) { resp ->	
-    	log.debug "resp-> ${resp.data}"        
+    	if (DEBUG) log.debug "resp-> ${resp.data}"        
         resp.data.each{        	
-            tempMap += ["${resp.data[it.key]['controller_name']}": it.key]
+            respMap += ["${resp.data[it.key]['controller_name']}": it.key]
         }        
       }
     }
     catch (e) {
         respMessage += "No schedules set, API error: $e"        
     }
-    atomicState.switches = tempMap
+    atomicState.switches = respMap
     
     return true
 }
@@ -404,17 +365,15 @@ def getControllerSettings(){
     }
    
     def newuri =  "https://api.spruceirrigation.com/v2/controller_settings?controller_id="
-	newuri += controller_id
-    log.debug newuri
+	newuri += controller_id    
         
     def scheduleType
     def scheduleID = []
-    def sensorMap = []
     def zoneID
-    def tempSchMap = [:]    
-    def tempManMap = [:]    
-    def tempZoneMap = [:]
-    def tempSensorMap = atomicState.sensors
+    def schMap = [:]    
+    def manSchMap = [:]    
+    def zoneMap = [:]
+    def sensorMap = atomicState.sensors
 
     def GETparams = [
         uri: newuri,		
@@ -423,7 +382,7 @@ def getControllerSettings(){
 
     try{ httpGet(GETparams) { resp ->	
         //get schedule list
-        log.debug "Get setting for ${resp.data.controller_name}"
+        if (DEBUG) log.debug "Get setting for ${resp.data.controller_name}"
         def i = 1
         def j = 1
         
@@ -432,11 +391,11 @@ def getControllerSettings(){
         	def schPath = resp.data.schedules[it.key]
         	if(schPath['schedule_enabled'] == "1"){
                 if(schPath['schedule_type'] == "manual"){            	
-                    tempManMap[i] = ['scheduleid' : it.key, 'name' : schPath['schedule_name']]
+                    manSchMap[i] = ['scheduleid' : it.key, 'name' : schPath['schedule_name']]
                     i++
                 }
                 else {            	
-                    tempSchMap[j] = ['scheduleid' : it.key, 'name' : schPath['schedule_name']]
+                    schMap[j] = ['scheduleid' : it.key, 'name' : schPath['schedule_name']]
                     j++
                 }
             }
@@ -446,18 +405,18 @@ def getControllerSettings(){
         	if(resp.data.zone[it.key]['zenabled'] == '1'){
             	
                 def zoneData = resp.data.zone[it.key]
-            	def ks = "${it.key}"
-            	if (ks.toInteger()<10) ks = "0${it.key}"
-                def zoneName = "Zone ${ks}"
+            	def zone = "${it.key}"
+            	//if (zone.toInteger()<10) zone = "0${it.key}"
+                def zoneName = "Zone ${zone}"
                 if ("${zoneData['zone_name']}" != 'null') zoneName = zoneData['zone_name']
                 
-                tempZoneMap["${ks}"] = [ 'zone_name': zoneName, 'landscape_type': zoneData['landscape_type'], 'nozzle_type': zoneData['nozzle_type'], 'soil_type': zoneData['soil_type'], 'gpm': zoneData['gpm'] ]
+                zoneMap["${zone}"] = [ 'zone_name': zoneName, 'landscape_type': zoneData['landscape_type'], 'nozzle_type': zoneData['nozzle_type'], 'soil_type': zoneData['soil_type'], 'gpm': zoneData['gpm'] ]
                 
                 //add sensor assignment
                 if (zoneData['sensor']){
-                	tempZoneMap["${ks}"]['sensor'] = zoneData['sensor']
-                	tempSensorMap.each{
-                        if (it.value == zoneData['sensor']) tempZoneMap["${ks}"]['sensor_name'] = it.key
+                	zoneMap["${zone}"]['sensor'] = zoneData['sensor']
+                	sensorMap.each{
+                        if (it.value == zoneData['sensor']) zoneMap["${zone}"]['sensor_name'] = it.key
                     }
                 }
                 
@@ -474,10 +433,10 @@ def getControllerSettings(){
         else return false
     }
     
-    log.debug tempManMap
+    if (DEBUG) log.debug manSchMap
     
     if(atomicState.manualMap != null){
-        if ("${tempManMap.sort()}" != "${atomicState.manualMap.sort()}") atomicState.manualUpdate = true
+        if ("${manSchMap.sort()}" != "${atomicState.manualMap.sort()}") atomicState.manualUpdate = true
         else atomicState.manualUpdate = false
 
         //do we update zone child devices
@@ -485,8 +444,8 @@ def getControllerSettings(){
         def tempMap = atomicState.zoneMap
         def names = ""
         def newnames = ""
-        tempZoneMap.sort().each{
-            newnames += tempZoneMap[it.key]['zone_name']
+        zoneMap.sort().each{
+            newnames += zoneMap[it.key]['zone_name']
         }
         tempMap.sort().each{    
             names += tempMap[it.key]['zone_name']
@@ -498,9 +457,9 @@ def getControllerSettings(){
         atomicState.manualUpdate = true
 	}
         
-    atomicState.scheduleMap = tempSchMap
-    atomicState.manualMap = tempManMap    
-    atomicState.zoneMap = tempZoneMap    
+    atomicState.scheduleMap = schMap
+    atomicState.manualMap = manSchMap    
+    atomicState.zoneMap = zoneMap    
     
     return true
     
@@ -510,20 +469,20 @@ def getControllerSettings(){
 //***************** event handlers *******************************
 
 def parse(description) {
-	log.debug(description)
+	log.debug "parse ${description}"
 }
 
 def getScheduleName(scheduleid){	
     def scheduleName = scheduleid
     
-    def tempSchedules = atomicState.manualMap
-    tempSchedules.each{
-    	if(tempSchedules[it.key]['scheduleid'] == scheduleid) scheduleName = "${tempSchedules[it.key]['name']}"
+    def manSchMap = atomicState.manualMap
+    manSchMap.each{
+    	if(manSchMap[it.key]['scheduleid'] == scheduleid) scheduleName = "${manSchMap[it.key]['name']}"
     }
     
-    tempSchedules = atomicState.scheduleMap
-    tempSchedules.each{
-    	if(tempSchedules[it.key]['scheduleid'] == scheduleid) scheduleName = "${tempSchedules[it.key]['name']}"
+    manSchMap = atomicState.scheduleMap
+    manSchMap.each{
+    	if(manSchMap[it.key]['scheduleid'] == scheduleid) scheduleName = "${manSchMap[it.key]['name']}"
     }
         
 	return scheduleName
@@ -531,7 +490,7 @@ def getScheduleName(scheduleid){
 
 //sensor evts
 def sensorHandler(evt) {
-    log.debug "sensorHandler: ${evt.device}, ${evt.name}, ${evt.value}"
+    if (DEBUG) log.debug "sensorHandler: ${evt.device}, ${evt.name}, ${evt.value}"
     
     def device = atomicState.sensors["${evt.device}"]
     def value = evt.value
@@ -545,24 +504,7 @@ def sensorHandler(evt) {
     }
         
     //added for battery
-    if (evt.name == "battery") value = evt.value.toInteger() * 5 + 2500
-    
-    def childDevice = ''
-    def tempZoneMap = atomicState.zoneMap
-    
-    if (evt.name != "battery"){
-        tempZoneMap.each{ zone->  	      
-            if(tempZoneMap[zone.key]['sensor'] == device){                
-                childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.${zone.key}"}
-                if (childDevice){
-                    log.debug "Sensor ${childDevice} ${tempZoneMap[zone.key]['sensor']} ${app.id}.${zone.key}"
-                    def result = [name: evt.name, value: value, descriptionText: evt.name, isStateChange: true, displayed: false]
-                    log.debug result
-                    childDevice.generateEvent(result)
-                }
-            }
-        }
-    }
+    if (evt.name == "battery") value = evt.value.toInteger() * 5 + 2500       
     
     def POSTparams = [
                     uri: uri,                   
@@ -654,16 +596,16 @@ def event(){
     def command = params.command
 	def event = command.split(',')
     
-	def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-    if (masterDevice != null){  	
+	def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+    if (parentDevice != null){  	
         def scheduleName = getScheduleName(event[2])
         def result = [name: 'status', value: "${event[0]}", descriptionText: "${scheduleName} starting\n${event[1]}", isStateChange: true, displayed: false]
-        log.debug result        
-        masterDevice.generateEvent(result)
+        if (DEBUG) log.debug result        
+        parentDevice.generateEvent(result)
         
         def tempManualMap = atomicState.manualMap        
         tempManualMap.each{
-            if ("${tempManualMap[it.key]['scheduleid']}" == "${event[2]}") masterDevice.zoneon("${app.id}.${it.key}")
+            if ("${tempManualMap[it.key]['scheduleid']}" == "${event[2]}") parentDevice.zoneon("${app.id}.${it.key}")
         }
     }
     return [error: false, return_value: 1]
@@ -676,7 +618,7 @@ def rain(){
 	log.debug(params.command)
     // use the built-in request object to get the command parameter
     def command = params.command
-    log.debug "Spruce incoming rain=>>  ${command}"
+    if (DEBUG) log.debug "Spruce incoming rain=>>  ${command}"
     
     def zoneonoff = command.split(',')
             
@@ -684,11 +626,11 @@ def rain(){
     def value = (zoneonoff[1].toInteger() == 1 ? 'on' : 'off')
     def message = "rain sensor is ${value}"
             
-    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+    def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
     
-    def result = [name: name, value: value, descriptionText: "${masterDevice} ${message}", isStateChange: true, displayed: true]
-    log.debug result
-    masterDevice.generateEvent(result)
+    def result = [name: name, value: value, descriptionText: "${parentDevice} ${message}", isStateChange: true, displayed: true]
+    if (DEBUG) log.debug result
+    parentDevice.generateEvent(result)
     
     return [error: false, return_value: 1]
 }
@@ -706,11 +648,11 @@ def pause(){
     def value = (zoneonoff[1].toInteger() == 1 ? 'on' : 'off')
     def message = "pause is ${value}"
             
-    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+    def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
     
-    def result = [name: name, value: value, descriptionText: "${masterDevice} ${message}", isStateChange: true, displayed: true]
+    def result = [name: name, value: value, descriptionText: "${parentDevice} ${message}", isStateChange: true, displayed: true]
     log.debug result
-    masterDevice.generateEvent(result)
+    parentDevice.generateEvent(result)
     
     return [error: false, return_value: 1]
 }
@@ -728,16 +670,16 @@ def zone_state(){
     def zoneonoff = command.split(',')
     def sz = zoneonoff.size()
     
-    def ks = zoneonoff[1]
+    def zone = zoneonoff[1]
     def scheduleid
     def scheduleName
-    def tempSchMap = atomicState.scheduleMap
-    //if (zoneonoff[1].toInteger() == 0) ks = "0"
-    //else if (zoneonoff[1].toInteger()<10) ks = "0${zoneonoff[1]}"
-   	//else ks = zoneonoff[1]
+    def schMap = atomicState.scheduleMap
+    //if (zoneonoff[1].toInteger() == 0) zone = "0"
+    //else if (zoneonoff[1].toInteger()<10) zone = "0${zoneonoff[1]}"
+   	//else zone = zoneonoff[1]
 
-    //def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.${ks}"}
-    def masterDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}    
+    //def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.${zone}"}
+    def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}    
     def name = 'switch'
     def value
     def message
@@ -749,14 +691,14 @@ def zone_state(){
         case "zon":            
             value = 'open'
             message = "on"
-            //if (ks != "0")
+            //if (zone != "0")
             zone_on++
             if (zoneonoff[2].toInteger() != 0) message += " for ${Math.round(zoneonoff[2].toInteger()/60)} mins"            
             break
         case "zoff":
             value = 'closed'
             message = "off"
-            //if (ks != "0")
+            //if (zone != "0")
             zone_on--
             break        
     }
@@ -764,8 +706,8 @@ def zone_state(){
     if (zone_on < 0) zone_on = 0
     log.debug "zone_on count: ${zone_on}"
     /*
-    if (atomicState.zones_on == 0 && zone_on == 1) masterDevice.generateEvent([name: 'switch', value: "on", descriptionText: "${settings.controller} ${message}", isStateChange: true, displayed: true])
-    else if (atomicState.zones_on >= 1 && zone_on == 0) masterDevice.generateEvent([name: 'switch', value: "off", descriptionText: "${settings.controller} ${message}", isStateChange: true, displayed: true])    
+    if (atomicState.zones_on == 0 && zone_on == 1) parentDevice.generateEvent([name: 'switch', value: "on", descriptionText: "${settings.controller} ${message}", isStateChange: true, displayed: true])
+    else if (atomicState.zones_on >= 1 && zone_on == 0) parentDevice.generateEvent([name: 'switch', value: "off", descriptionText: "${settings.controller} ${message}", isStateChange: true, displayed: true])    
     */
     atomicState.zones_on = zone_on
 	/* 
@@ -775,28 +717,28 @@ def zone_state(){
         childDevice.generateEvent(gpm)
         childDevice.generateEvent(amp)
         
-        masterDevice.generateEvent(amp)
+        parentDevice.generateEvent(amp)
         if ("${zoneonoff[3]}" != 'ok') note('Valve Fault', "${childDevice} gpm flow ${zoneonoff[3]}")
         if ("${zoneonoff[4]}" != 'ok') note('Valve Fault', "${childDevice} valve check ${zoneonoff[4]}")
     }
     */
-    def zoneResult = [name: "${ks}", value: value, descriptionText: "Zone${ks} ${message}", isStateChange: true, displayed: true]
+    def zoneResult = [name: zone, value: value, descriptionText: "Zone${zone} ${message}", isStateChange: true, displayed: true]
     
     log.debug zoneResult
-    masterDevice.generateEvent(zoneResult)
+    parentDevice.generateEvent(zoneResult)
     
     def masterResult = [name: name, value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
-    if (ks == "0"){
+    if (zone == "0"){
     	if (value == 'off') masterResult = [name: 'status', value: 'ready', descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
     	else if (value == 'on') masterResult = [name: 'status', value: 'active', descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
-        masterDevice.generateEvent(masterResult)
+        parentDevice.generateEvent(masterResult)
     }
-    else if (ks != "0"){
+    else if (zone != "0"){
     	masterResult = [name: 'status', value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
-    	masterDevice.generateEvent(masterResult)
+    	parentDevice.generateEvent(masterResult)
     }
     
-    if (sz >= 5) note('Zone',"${childDevice} ${message}")
+    if (sz >= 5) note('Zone',"${parentDevice} ${message}")
     return [error: false, return_value: 1]    
 }
 

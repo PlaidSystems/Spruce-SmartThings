@@ -11,61 +11,18 @@
  *  for the specific language governing permissions and limitations under the License.
  *
 
- Version v3.5
- * update zigbee ONOFF cluster
- * update Health Check
- * remove binding since reporting handles this
-
- Version v3.4
- * update presentation with 'patch' to rename 'valve' to 'Zone x'
- * remove commands on, off
- * add command setValveDuration
- * update settings order and description
- * fix controllerStatus -> status
-
- Version v3.3
- * change to remotecontrol with components
- * health check -> ping
-
- Version v3.2
- * add zigbee constants
- * update to zigbee commands
- * tabs and trim whitespace
-
- Version v3.1
- * Change to work with standard ST automation options
- * use standard switch since custom attributes still don't work in automations
- * Add schedule minute times to settings
- * Add split cycle to settings
- * deprecate Spruce Scheduler compatibility
-
- Version v3.0
- * Update for new Samsung SmartThings app
- * update vid with status, message, rainsensor
- * maintain compatibility with Spruce Scheduler
- * Requires Spruce Valve as child device
-
- Version v2.7
- * added Rain Sensor = Water Sensor Capability
- * added Pump/Master
- * add "Dimmer" to Spruce zone child for manual duration
-
+ Version v1.0
+ * Update to use similar DTH as SmartThings Spruce Controller, including custom capabilities
+ * 
+ 
 **/
 
 import groovy.json.JsonOutput
-import physicalgraph.zigbee.zcl.DataType
 
 //dth version
-def getVERSION() {'v1.0 5-2021'}
-def getDEBUG() {false}
+def getVERSION() {"v1.0 7-2021"}
+def getDEBUG() {true}
 def getHC_INTERVAL_MINS() {60}
-//zigbee cluster, attribute, identifiers
-def getALARMS_CLUSTER() {0x0009}
-def getBINARY_INPUT_CLUSTER() {0x000F}
-def getON_TIME_ATTRIBUTE() {0x4001}
-def getOFF_WAIT_TIME_ATTRIBUTE() {0x4002}
-def getOUT_OF_SERVICE_IDENTIFIER() {0x0051}
-def getPRESENT_VALUE_IDENTIFIER() {0x0055}
 
 metadata {
 	definition (name: "Spruce Wifi Controller", namespace: "plaidsystems", author: "Plaid Systems", mnmn: "SmartThingsCommunity",
@@ -74,13 +31,13 @@ metadata {
 		capability "Actuator"
 		capability "Switch"
 		capability "Sensor"
-		//capability "Health Check"
+		capability "Health Check"
 		capability "heartreturn55003.status"
 		capability "heartreturn55003.controllerState"
 		capability "heartreturn55003.rainSensor"
 		capability "heartreturn55003.valveDuration"
 
-		//capability "Configuration"
+		capability "Configuration"
 		capability "Refresh"
 
 		attribute "status", "string"
@@ -98,16 +55,31 @@ metadata {
 	preferences {
 		//general device settings
 		input title: "Device settings", displayDuringSetup: true, type: "paragraph", element: "paragraph",
-			description: "Zone settings are configured in the Spruce app.\n\nRefresh the configuration changes by opening the Spruce Connect SmartApp and saving."
+			description: "Zone and Schedule settings are configured in the Spruce app."
 		input title: "Version", description: VERSION, displayDuringSetup: true, type: "paragraph", element: "paragraph"
 	}
 }
 
 //----------------------zigbee parse-------------------------------//
 
+def parse(String description) {
+	log.debug "parse ${description}"        
+    
+    sendEvent(name: "switch", value: "off", isStateChange: true)
+	sendEvent(name: "controllerState", value: "off", isStateChange: true)
+	sendEvent(name: "status", value: "Initialize", isStateChange: true)
+	sendEvent(name: "rainSensor", value: "dry", isStateChange: true)
+	sendEvent(name: "valveDuration", value: 10, isStateChange: true)
+}
+
 // Parse incoming device messages to generate events
 def generateEvent(description) {
 	log.debug "generateEvent ${description}"
+    
+    def child = childDevices.find{it.deviceNetworkId == "${device.deviceNetworkId}:${description.name}"}
+    if (child) {
+    	child.sendEvent(name: "valve", value: description.value)
+    }
 	/*
 	def result = []
 	def endpoint, value, command
@@ -169,9 +141,8 @@ def generateEvent(description) {
 //--------------------end zigbee parse-------------------------------//
 
 def installed() {
-	//createChildDevices()
-	parent.getValveConfiguration()
-	initialize()
+	//get configuration
+	parent.getValveConfiguration()	
 }
 
 def uninstalled() {
@@ -181,45 +152,50 @@ def uninstalled() {
 
 def updated() {
 	log.debug "updated"
+	parent.getValveConfiguration()
 	initialize()
 }
 
 def initialize() {
 	log.debug "initialize"
-	sendEvent(name: "switch", value: "off", displayed: false)
-	sendEvent(name: "controllerState", value: "off", displayed: false)
-	sendEvent(name: "status", value: "Initialize")
-	sendEvent(name: "rainSensor", value: "dry")
-	if (device.latestValue("valveDuration") == null) sendEvent(name: "valveDuration", value: 10)
-
-	//update zigbee device settings
-	//response(setDeviceSettings() + setTouchButtonDuration() + setRainSensor() + refresh())
+	sendEvent(name: "DeviceWatch-DeviceStatus", value: "online")
+	sendEvent(name: "DeviceWatch-Enroll", value: [protocol: "cloud", scheme:"untracked"].encodeAsJson(), displayed: false)    
+    updateDataValue("manufacturer", "Plaid Systems")
+    
+    sendEvent(name: "switch", value: "off", isStateChange: true)
+	sendEvent(name: "controllerState", value: "off", isStateChange: true)
+	sendEvent(name: "status", value: "Initialize", isStateChange: true)
+	sendEvent(name: "rainSensor", value: "dry", isStateChange: true)
+	sendEvent(name: "valveDuration", value: 10, isStateChange: true)
 }
 
-def createChildDevices(tempZoneMap) {
+def createChildDevices(zoneMap) {
 	log.debug "create children"
-	log.debug "tempZoneMap ${tempZoneMap}"
-	def pumpMasterZone = (pumpMasterZone ? pumpMasterZone.replaceFirst("Zone ","").toInteger() : null)
+	if (DEBUG) log.debug "zoneMap ${zoneMap}"	
 
-	//create, rename, or remove child
-	tempZoneMap.each{
-		//endpoint is offset, zone number +1
-		//def endpoint = "${it.key}"
-		def i = it.key.toInteger()
-
+	//create or remove child	
+    for (i in 1..16) {
+		//check if zone enabled
+		def enabledZone = zoneMap.containsKey("${i}")
+		//look for current child
 		def child = childDevices.find{it.deviceNetworkId == "${device.deviceNetworkId}:${i}"}
+
+		if (DEBUG) log.debug "child ${i} ${enabledZone} ${child}"
+
 		//create child
-		if (!child) {
+		if (enabledZone && !child) {
 			def childLabel = "Zone$i"
 			child = addChildDevice("Spruce Valve", "${device.deviceNetworkId}:${i}", device.hubId,
-					[completedSetup: true, label: "${childLabel}", isComponent: true, componentName: "Zone$i", componentLabel: "Zone$i"])
-			log.debug "${child}"
+					[completedSetup: true, label: "${childLabel}", isComponent: true, componentName: "Zone$i", componentLabel: "Zone$i"])			
 			child.sendEvent(name: "valve", value: "closed", displayed: false)
+		}
+		//or remove
+		else if (!enabledZone && child) {
+			deleteChildDevice(child)
 		}
 
 	}
-
-	state.oldLabel = device.label
+	
 }
 
 def removeChildDevices() {
@@ -238,7 +214,7 @@ def removeChildDevices() {
 //----------------------------------commands--------------------------------------//
 
 // handle commands
-def poll() { log.debug "poll" }
+def ping() { log.debug "ping" }
 def refresh() { log.debug "refresh" }
 def configure() { log.debug "configure" }
 
@@ -250,8 +226,6 @@ def setStatus(status) {
 def setRainSensor() {
 	if (DEBUG) log.debug "Rain sensor: ${rainSensorEnable}"
 	sendEvent(name: "rainSensor", value: "dry")
-	//if (rainSensorEnable) return zigbee.writeAttribute(BINARY_INPUT_CLUSTER, OUT_OF_SERVICE_IDENTIFIER, DataType.BOOLEAN, 1, [destEndpoint: 18])
-	//else return zigbee.writeAttribute(BINARY_INPUT_CLUSTER, OUT_OF_SERVICE_IDENTIFIER, DataType.BOOLEAN, 0, [destEndpoint: 18])
 }
 
 def setValveDuration(duration) {
@@ -344,7 +318,7 @@ def valveOn(valueMap) {
 	def duration = (device.latestValue("valveDuration").toInteger())
 
 	sendEvent(name: "status", value: "${valueMap.label} on for ${duration}min(s)", descriptionText: "Zone ${valueMap.label} on for ${duration}min(s)")
-	if (DEBUG) log.debug "state ${state.hasConfiguredHealthCheck} ${zigbee.ONOFF_CLUSTER}"
+	if (DEBUG) log.debug "valve on"
 	parent.zoneOnOff(endpoint, 1, duration)
 }
 
@@ -352,7 +326,7 @@ def valveOff(valueMap) {
 	def endpoint = valueMap.dni.replaceFirst("${device.deviceNetworkId}:","").toInteger()
 
 	sendEvent(name: "status", value: "${valueMap.label} turned off", descriptionText: "${valueMap.label} turned off")
-
+	if (DEBUG) log.debug "valve off"
 	parent.zoneOnOff(endpoint, 0, 0)
 }
 
@@ -361,28 +335,5 @@ def valveOff(valueMap) {
 
 //get times from settings and send to controller, then start schedule
 def startSchedule() {
-	def startRun = false
-	def runTime, totalTime=0
-	def scheduleTimes = []
-
-	for (i in 1..16) {
-		def endpoint = i + 1
-		//if (settings."z${i}" && settings."z${i}Duration" != null) {
-		if (settings."z${i}Duration" != null) {
-			runTime = Integer.parseInt(settings."z${i}Duration")
-			totalTime += runTime
-			startRun = true
-
-			scheduleTimes.push(zigbee.writeAttribute(zigbee.ONOFF_CLUSTER, OFF_WAIT_TIME_ATTRIBUTE, DataType.UINT16, runTime, [destEndpoint: endpoint]))
-		}
-		else {
-			scheduleTimes.push(zigbee.writeAttribute(zigbee.ONOFF_CLUSTER, OFF_WAIT_TIME_ATTRIBUTE, DataType.UINT16, 0, [destEndpoint: endpoint]))
-		}
-	}
-	if (!startRun || totalTime == 0) return noSchedule()
-
-	//start after scheduleTimes are sent
-	scheduleTimes.push(zigbee.command(zigbee.ONOFF_CLUSTER, 1, "", [destEndpoint: 1]))
-	sendEvent(name: "status", value: "Scheduled for ${totalTime}min(s)", descriptionText: "Start schedule ending in ${totalTime} mins")
-	return scheduleTimes
+	if (DEBUG) log.debug "startSchedule"
 }
