@@ -12,16 +12,17 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- 
- Version v1.5 
+
+ Version v1.5
  * update for 2021 app
  * remove componentName and componentLabel from childDevice FIXED new app issues
- 
+ * updating enabled zones in Spruce app causes dth offline **need to fix**
+
  **/
- 
+
 def version() {"Spruce-Connect v1.5\n 7.2021"}
 def getDEBUG() {true}
-    
+
 definition(
     name: "Spruce Connect",
     namespace: "plaidsystems",
@@ -37,7 +38,7 @@ definition(
 	//appSetting "clientId"
 	//appSetting "clientSecret"
     //appSetting "serverUrl"
-    
+
     atomicState.clientid = "smartthings"
     atomicState.clientSecret = "081ce71eec73b1fdad2253d1d88819a5"
 }
@@ -52,24 +53,24 @@ preferences (oauthPage: "authPage") {
 }
 
 def authPage(){
-    if(!atomicState.accessToken) atomicState.accessToken = createAccessToken()	//set = so token is saved to atomicState 
-    
+    if(!atomicState.accessToken) atomicState.accessToken = createAccessToken()	//set = so token is saved to atomicState
+
     if(!atomicState.authToken){
     	pageConnect()
     }
-    else if (!controllerSelected()){    	
+    else if (!controllerSelected()){
     	pageController()
     }
     else pageDevices()
 }
 
-def controllerSelected(){	
+def controllerSelected(){
 	if (settings.controller != null) return true
     return false
 }
 
 def pageConnect(){
-    if(!atomicState.authToken){		
+    if(!atomicState.authToken){
         def redirectUrl = "https://graph.api.smartthings.com/oauth/initialize?appId=${app.id}&access_token=${atomicState.accessToken}&apiServerUrl=${getApiServerUrl()}"
 		if (DEBUG) log.debug "redirectUrl ${redirectUrl}"
         dynamicPage(name: "pageConnect", title: "Connect Account",  uninstall: false, install:false) {
@@ -77,20 +78,20 @@ def pageConnect(){
                 href url: redirectUrl, style:"embedded", required:false, title:"Connect Spruce Account", image: 'http://www.plaidsystems.com/smartthings/st_spruce_leaf_250f.png', description: "Login to grant access"
             }
         }
-    }    
+    }
     else pageController()
 }
 
 def pageController(){
     if (atomicState.authToken && getControllerList()){
     	def select_device = getSpruceDevices()
-        dynamicPage(name: "pageController", uninstall: true, install:false, nextPage: "pageDevices") {            
+        dynamicPage(name: "pageController", uninstall: true, install:false, nextPage: "pageDevices") {
             section("Select Spruce Controller\n to connect with SmartThings") {
-            	input(name: "controller", title:"Select Spruce Controller:", type: "enum", required:true, multiple:false, description: "Tap to choose", metadata:[values:select_device])                
+            	input(name: "controller", title:"Select Spruce Controller:", type: "enum", required:true, multiple:false, description: "Tap to choose", metadata:[values:select_device])
     		}
             section("${version()}")
         }
-    }    
+    }
     else pageDevices()
 }
 
@@ -101,7 +102,7 @@ def pageDevices(){
         dynamicPage(name: "pageDevices", uninstall: true, install:true) {
         	if(atomicState.zoneUpdate == true) section("Device changes found, device tiles will be updated! \n\nErrors will occur if devices are assigned to Automations and SmartApps, please remove before updating.\n"){}
          	section("Select settings for connected devices\nConnected controller: ${settings.controller}\nConnected zones: ${zoneList()}") {
-                input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['Schedule','Zone','Valve Fault']])                
+                input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['Schedule','Zone','Valve Fault']])
             }
             section("SmartThings Spruce Sensors that will report to Spruce Cloud:") {
                 input "sensors", "capability.relativeHumidityMeasurement", title: "Spruce Moisture sensors:", required: false, multiple: true
@@ -112,8 +113,8 @@ def pageDevices(){
                 input "delay", "number", title: "The delay in minutes that water will resume after the contact is closed or motion stops, default=5, max=119", required: false, range: '0..119'
             }
             section("${version()}")
-        }   
-    }    
+        }
+    }
     else {
     	atomicState.authToken = null
     	authPage()
@@ -132,15 +133,15 @@ def zoneList(){
     return zoneString;
 }
 
-mappings {  
+mappings {
   path("/event/:command") {
     action: [
       POST: "event"
     ]
-  }  
-  path("/zonestate/:command") {  
+  }
+  path("/zonestate/:command") {
     action: [
-      POST: "zone_state"
+      POST: "zoneState"
     ]
   }
   path("/rain/:command") {
@@ -168,103 +169,103 @@ mappings {
 //***************** install *******************************
 
 def installed() {
-	log.debug "Installed with settings: ${settings}"    
+	log.debug "Installed with settings: ${settings}"
     initialize()
 }
 
 def updated() {
-	log.debug "Updated with settings: ${settings}"	
+	log.debug "Updated with settings: ${settings}"
 	unsubscribe()
 	initialize()
 }
 
-def initialize() {	
-    log.debug "initialize"    
+def initialize() {
+    log.debug "initialize"
     atomicState.zones_on = 0
-    
+
     if (settings.sensors) getSensors()
     if (settings.contacts) getContacts()
 	if (settings.motions) getMotions()
-    
+
     //add devices to web, check for schedules
-    if(atomicState.accessToken){    	
+    if(atomicState.accessToken){
         addDevices()
-    	createChildDevices()        
-	}    
+    	createChildDevices()
+	}
 }
 
 //get zone device list
-def getSpruceDevices(){	
+def getSpruceDevices(){
    def controllers = []
-   
+
    def tempSwitch = atomicState.switches
    int i=0
    tempSwitch.each{
-   	controllers[i] = it.key    
+   	controllers[i] = it.key
     i++
-   }   
-   return controllers       
+   }
+   return controllers
 }
 
 //sensor subscriptions
-def getSensors(){    
-    log.debug "getSensors: " + settings.sensors    
-    
+def getSensors(){
+    log.debug "getSensors: " + settings.sensors
+
     def tempSensors = [:]
     settings.sensors.each{
     	tempSensors[it]= (it.device.zigbeeId)
         }
     atomicState.sensors = tempSensors
-    
+
     subscribe(settings.sensors, "humidity", sensorHandler)
     subscribe(settings.sensors, "temperature", sensorHandler)
-    subscribe(settings.sensors, "battery", sensorHandler)    
+    subscribe(settings.sensors, "battery", sensorHandler)
 }
 
 //contact subscriptions
-def getContacts(){    
-    log.debug "getContacts: " + settings.contacts    
-    
+def getContacts(){
+    log.debug "getContacts: " + settings.contacts
+
     def tempContacts = [:]
     settings.contacts.each{
     	tempContacts[it]= (it.device.zigbeeId)
         }
     atomicState.contacts = tempContacts
-    
-    subscribe(settings.contacts, "contact", contactHandler)    
+
+    subscribe(settings.contacts, "contact", contactHandler)
 }
 
 //contact motions
-def getMotions(){    
-    log.debug "getMotions: " + settings.motions    
-    
+def getMotions(){
+    log.debug "getMotions: " + settings.motions
+
     def tempMotions = [:]
     settings.motions.each{
     	tempMotions[it]= (it.device.zigbeeId)
         }
     atomicState.motions = tempMotions
-    
-    subscribe(settings.motions, "motion", motionHandler)    
+
+    subscribe(settings.motions, "motion", motionHandler)
 }
 
 //------------------create and remove child tiles------------------------------
 
 //create zone buttons in controller
 def getValveConfiguration(){
-    def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+    def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
     def zoneMap = atomicState.zoneMap
-    parentDevice.createChildDevices(zoneMap)
+    controllerDevice.createChildDevices(zoneMap)
 }
 
 //create zone tiles children
 private void createChildDevices(){
 	log.debug "create zone children ${atomicState.zoneUpdate} with ${app.id}"
-    
-    
+
+
 
     //if(atomicState.zoneUpdate == true){
     	//removeChildDevices()
-    
+
         //get Spruce Controller Name
         def controllerLabel
         def tempSwitch = atomicState.switches
@@ -272,17 +273,17 @@ private void createChildDevices(){
             controllerLabel = it.key
         }
 
-        def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-        if (!parentDevice) addChildDevice("Spruce Wifi Controller", "${app.id}", null, [completedSetup: true, label: controllerLabel, isComponent: false])
-        else getValveConfiguration()
-    //}   
-      
+        def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+        if (!controllerDevice) addChildDevice("Spruce Wifi Controller", "${app.id}", null, [completedSetup: true, label: controllerLabel, isComponent: false])
+        else controllerDevice.updated()
+    //}
+
 }
 
 //remove zone tiles children
 private removeChildDevices() {
 	log.debug "remove children"
-	
+
     //get and delete children avoids duplicate children
     def children = getChildDevices()
     if (DEBUG) log.debug children
@@ -290,12 +291,12 @@ private removeChildDevices() {
         children.each{
         	deleteChildDevice(it.deviceNetworkId)
         }
-    }       
+    }
 }
 
 
 //add devices to spruce webapp
-def addDevices(){	
+def addDevices(){
     //add sensors to web
     def key = atomicState.authToken
     def sensorMap = atomicState.sensors
@@ -306,7 +307,7 @@ def addDevices(){
             headers: [ 	"Authorization": "Bearer ${key}"],
             body: [
                 device_id: it.value,
-                sensor_name: it.key,                
+                sensor_name: it.key,
                 gateway: "smartthings"
                 ]
         ]
@@ -314,13 +315,13 @@ def addDevices(){
         try{
             httpPost(POSTparams){
                 resp -> //resp.data {
-                    log.debug "${resp.data}"               
-            }                
-        } 
+                    log.debug "${resp.data}"
+            }
+        }
         catch (e) {
             log.debug "send DB error: $e"
         }
-    }    
+    }
 
 }
 
@@ -330,25 +331,25 @@ def addDevices(){
 def getControllerList(){
 	def key = atomicState.authToken
     def respMap = [:]
-    def newuri =  "https://api.spruceirrigation.com/v2/controllers"    
-        
+    def newuri =  "https://api.spruceirrigation.com/v2/controllers"
+
     def GETparams = [
-        uri: newuri,		
+        uri: newuri,
         headers: [ 	"Authorization": "Bearer ${key}"],
     ]
 
-    try{ httpGet(GETparams) { resp ->	
-    	if (DEBUG) log.debug "resp-> ${resp.data}"        
-        resp.data.each{        	
+    try{ httpGet(GETparams) { resp ->
+    	if (DEBUG) log.debug "resp-> ${resp.data}"
+        resp.data.each{
             respMap += ["${resp.data[it.key]['controller_name']}": it.key]
-        }        
+        }
       }
     }
     catch (e) {
-        respMessage += "No schedules set, API error: $e"        
+        respMessage += "No schedules set, API error: $e"
     }
     atomicState.switches = respMap
-    
+
     return true
 }
 
@@ -359,59 +360,59 @@ def getControllerSettings(){
     def key = atomicState.authToken
 
 	def controller_id
-   	def tempSwitch = atomicState.switches    
+   	def tempSwitch = atomicState.switches
     tempSwitch.each{
         if (it.key == settings.controller) controller_id = it.value
     }
-   
+
     def newuri =  "https://api.spruceirrigation.com/v2/controller_settings?controller_id="
-	newuri += controller_id    
-        
+	newuri += controller_id
+
     def scheduleType
     def scheduleID = []
     def zoneID
-    def schMap = [:]    
-    def manSchMap = [:]    
+    def schMap = [:]
+    def manSchMap = [:]
     def zoneMap = [:]
     def sensorMap = atomicState.sensors
 
     def GETparams = [
-        uri: newuri,		
+        uri: newuri,
         headers: [ 	"Authorization": "Bearer ${key}"],
     ]
 
-    try{ httpGet(GETparams) { resp ->	
+    try{ httpGet(GETparams) { resp ->
         //get schedule list
         if (DEBUG) log.debug "Get setting for ${resp.data.controller_name}"
         def i = 1
         def j = 1
-        
+
         //def schedules = resp.data.schedules
         resp.data.schedules.each{
         	def schPath = resp.data.schedules[it.key]
         	if(schPath['schedule_enabled'] == "1"){
-                if(schPath['schedule_type'] == "manual"){            	
+                if(schPath['schedule_type'] == "manual"){
                     manSchMap[i] = ['scheduleid' : it.key, 'name' : schPath['schedule_name']]
                     i++
                 }
-                else {            	
+                else {
                     schMap[j] = ['scheduleid' : it.key, 'name' : schPath['schedule_name']]
                     j++
                 }
             }
         }
-        
+
         resp.data.zone.each{
         	if(resp.data.zone[it.key]['zenabled'] == '1'){
-            	
+
                 def zoneData = resp.data.zone[it.key]
             	def zone = "${it.key}"
             	//if (zone.toInteger()<10) zone = "0${it.key}"
                 def zoneName = "Zone ${zone}"
                 if ("${zoneData['zone_name']}" != 'null') zoneName = zoneData['zone_name']
-                
+
                 zoneMap["${zone}"] = [ 'zone_name': zoneName, 'landscape_type': zoneData['landscape_type'], 'nozzle_type': zoneData['nozzle_type'], 'soil_type': zoneData['soil_type'], 'gpm': zoneData['gpm'] ]
-                
+
                 //add sensor assignment
                 if (zoneData['sensor']){
                 	zoneMap["${zone}"]['sensor'] = zoneData['sensor']
@@ -419,22 +420,22 @@ def getControllerSettings(){
                         if (it.value == zoneData['sensor']) zoneMap["${zone}"]['sensor_name'] = it.key
                     }
                 }
-                
+
            	}
-        }      
-        
+        }
+
     }
-    
-    
+
+
     }
     catch (e) {
         respMessage += "No schedules set, API error: $e"
         if (refreshAuthToken()) getControllerSettings()
         else return false
     }
-    
+
     if (DEBUG) log.debug manSchMap
-    
+
     if(atomicState.manualMap != null){
         if ("${manSchMap.sort()}" != "${atomicState.manualMap.sort()}") atomicState.manualUpdate = true
         else atomicState.manualUpdate = false
@@ -447,70 +448,71 @@ def getControllerSettings(){
         zoneMap.sort().each{
             newnames += zoneMap[it.key]['zone_name']
         }
-        tempMap.sort().each{    
+        tempMap.sort().each{
             names += tempMap[it.key]['zone_name']
-        }    
+        }
         if(names != newnames) atomicState.zoneUpdate = true
     }
     else {
     	atomicState.zoneUpdate = true
         atomicState.manualUpdate = true
 	}
-        
+
     atomicState.scheduleMap = schMap
-    atomicState.manualMap = manSchMap    
-    atomicState.zoneMap = zoneMap    
-    
+    atomicState.manualMap = manSchMap
+    atomicState.zoneMap = zoneMap
+
     return true
-    
+
 }
 
 
 //***************** event handlers *******************************
 
-def parse(description) {
-	log.debug "parse ${description}"
-}
-
-def getScheduleName(scheduleid){	
+def getScheduleName(scheduleid){
     def scheduleName = scheduleid
-    
+
     def manSchMap = atomicState.manualMap
     manSchMap.each{
     	if(manSchMap[it.key]['scheduleid'] == scheduleid) scheduleName = "${manSchMap[it.key]['name']}"
     }
-    
-    manSchMap = atomicState.scheduleMap
-    manSchMap.each{
-    	if(manSchMap[it.key]['scheduleid'] == scheduleid) scheduleName = "${manSchMap[it.key]['name']}"
+
+    def schMap = atomicState.scheduleMap
+    schMap.each{
+    	if(schMap[it.key]['scheduleid'] == scheduleid) scheduleName = "${schMap[it.key]['name']}"
     }
-        
+
 	return scheduleName
 }
 
 //sensor evts
 def sensorHandler(evt) {
     if (DEBUG) log.debug "sensorHandler: ${evt.device}, ${evt.name}, ${evt.value}"
-    
+
     def device = atomicState.sensors["${evt.device}"]
-    def value = evt.value
     def uri = "https://api.spruceirrigation.com/v2/"
-    
-    if (evt.name == "humidity") uri += "moisture"
-    
-    if (evt.name == "temperature"){
-    	uri += "temperature"
-        if (evt.unit == "C") value = evt.value.toInteger() * 9/5 + 32
+    def value = evt.value
+
+    switch(evt.name){
+        case "humidity":
+            uri += "moisture"
+            break
+        case "temperature":
+            uri += "temperature"
+            if (evt.unit == "C") value = evt.value.toInteger() * 9/5 + 32
+            break
+        case "battery":
+            uri += "battery"
+            value = evt.value.toInteger() * 5 + 2500
+            break
     }
-        
-    //added for battery
-    if (evt.name == "battery") value = evt.value.toInteger() * 5 + 2500       
-    
+
+
     def POSTparams = [
-                    uri: uri,                   
+                    uri: uri,
                     body: [
                         deviceid: device,
-                        value: value                        
+                        value: value
                     ]
                 ]
 
@@ -520,53 +522,51 @@ def sensorHandler(evt) {
 //contact evts
 def contactHandler(evt) {
     log.debug "contactHandler: ${evt.device}, ${evt.name}, ${evt.value}"
-    
-    def device = atomicState.contacts["${evt.device}"]    
+
+    def device = atomicState.contacts["${evt.device}"]
     def value = evt.value
-        
-    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-    
-    log.debug "Found ${childDevice}"
-    if (childDevice != null){    	
-        def result = [name: evt.name, value: value, descriptionText: evt.name, isStateChange: true, displayed: false]
-        log.debug result
-        childDevice.generateEvent(result)
+
+    def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+
+    if (controllerDevice != null){
+        def eventMap = [name: evt.name, value: value, descriptionText: evt.name, isStateChange: true, displayed: false]
+        controllerDevice.generateEvent(eventMap)
     }
-    
+
     int delay_secs = 0
     if (settings.delay) delay_secs = settings.delay * 60
-    
+
+    //start pause, or resume with delay
     if (value == 'open'){
-		send_pause(0)
-		unschedule (send_resume)
+		sendPause(0)
+		unschedule(sendResume)
 	}
-    else runIn(delay_secs, send_resume)
+    else runIn(delay_secs, sendResume)
 }
 
 //motion evts
 def motionHandler(evt) {
     log.debug "motionHandler: ${evt.device}, ${evt.name}, ${evt.value}"
-    
-    def device = atomicState.motions["${evt.device}"]    
+
+    def device = atomicState.motions["${evt.device}"]
     def value = evt.value
-        
-    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-    
-    log.debug "Found ${childDevice}"
-    if (childDevice != null){    	
-        def result = [name: evt.name, value: value, descriptionText: evt.name, isStateChange: true, displayed: false]
-        log.debug result
-        childDevice.generateEvent(result)
+
+    def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+
+    if (controllerDevice != null){
+        def eventMap = [name: evt.name, value: value, descriptionText: evt.name, isStateChange: true, displayed: false]
+        controllerDevice.generateEvent(eventMap)
     }
-    
+
     int delay_secs = 0
     if (settings.delay) delay_secs = settings.delay * 60
-    
+
+    //start pause, or resume with delay
     if (value == 'active'){
-		send_pause(0)
-		unschedule (send_resume)
+		sendPause(0)
+		unschedule (sendResume)
 	}
-    else runIn(delay_secs, send_resume)
+    else runIn(delay_secs, sendResume)
 }
 
 
@@ -574,39 +574,18 @@ def motionHandler(evt) {
 
 //*************** master child ***************
 
-//refresh settings
-void getsettings(){
-	log.debug "Update Settings"
-    
-	if (getControllerSettings()){
-		def children = getChildDevices()
-        children.each { child ->
-            //log.debug child.deviceNetworkId
-            child_zones(child.deviceNetworkId)
-        }
-    }
-        
-    def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-    childDevice.update_settings()
-}
-
-//big tile events
+//events
 def event(){
 	log.debug "cloud event: ${params.command}"
-    def command = params.command
-	def event = command.split(',')
-    
-	def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-    if (parentDevice != null){  	
-        def scheduleName = getScheduleName(event[2])
-        def result = [name: 'status', value: "${event[0]}", descriptionText: "${scheduleName} starting\n${event[1]}", isStateChange: true, displayed: false]
-        if (DEBUG) log.debug result        
-        parentDevice.generateEvent(result)
-        
-        def tempManualMap = atomicState.manualMap        
-        tempManualMap.each{
-            if ("${tempManualMap[it.key]['scheduleid']}" == "${event[2]}") parentDevice.zoneon("${app.id}.${it.key}")
-        }
+    def commandParams = params.command
+	def eventMap = commandParams.split(',')
+
+	def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+    if (controllerDevice != null){
+        def scheduleName = getScheduleName(eventMap[2])
+        def result = [name: 'status', value: "${eventMap[0]}", descriptionText: "${scheduleName} starting\n${eventMap[1]}", isStateChange: true, displayed: false]
+        if (DEBUG) log.debug result
+        controllerDevice.generateEvent(result)
     }
     return [error: false, return_value: 1]
 }
@@ -615,171 +594,144 @@ def event(){
 
 //rain sensor onoff
 def rain(){
-	log.debug(params.command)
     // use the built-in request object to get the command parameter
-    def command = params.command
-    if (DEBUG) log.debug "Spruce incoming rain=>>  ${command}"
-    
-    def zoneonoff = command.split(',')
-            
+    def commandParams = params.command
+    if (DEBUG) log.debug "Spruce incoming rain=>>  ${commandParams}"
+
+    def eventMap = commandParams.split(',')
+
     def name = 'rainsensor'
-    def value = (zoneonoff[1].toInteger() == 1 ? 'on' : 'off')
+    def value = (eventMap[1].toInteger() == 1 ? 'wet' : 'dry')
     def message = "rain sensor is ${value}"
-            
-    def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-    
-    def result = [name: name, value: value, descriptionText: "${parentDevice} ${message}", isStateChange: true, displayed: true]
-    if (DEBUG) log.debug result
-    parentDevice.generateEvent(result)
-    
+
+    def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+
+    def result = [name: name, value: value, descriptionText: "${controllerDevice} ${message}", isStateChange: true, displayed: true]
+    controllerDevice.generateEvent(result)
+
     return [error: false, return_value: 1]
 }
 
 //pause onoff
 def pause(){
-	log.debug(params.command)
     // use the built-in request object to get the command parameter
-    def command = params.command
-    log.debug "Spruce incoming pause=>>  ${command}"
-    
-    def zoneonoff = command.split(',')
-            
+    def commandParams = params.command
+    log.debug "Spruce incoming pause=>>  ${commandParams}"
+
+    def eventMap = commandParams.split(',')
+
     def name = 'pause'
-    def value = (zoneonoff[1].toInteger() == 1 ? 'on' : 'off')
+    def value = (eventMap[1].toInteger() == 1 ? 'on' : 'off')
     def message = "pause is ${value}"
-            
-    def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-    
-    def result = [name: name, value: value, descriptionText: "${parentDevice} ${message}", isStateChange: true, displayed: true]
-    log.debug result
-    parentDevice.generateEvent(result)
-    
+
+    def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+
+    def result = [name: name, value: value, descriptionText: "${controllerDevice} ${message}", isStateChange: true, displayed: true]
+    controllerDevice.generateEvent(result)
+
     return [error: false, return_value: 1]
 }
 
 //*********** child zone devices *************
 
 //turn on/off zones of child devices
-def zone_state(){
-	log.debug "cloud zone_state: ${params.command}"
+def zoneState(){
     // use the built-in request object to get the command parameter
-    def command = params.command
-    log.debug "Spruce incoming zone=>>  ${command}"
-    
-    //check sz to filter out command
-    def zoneonoff = command.split(',')
-    def sz = zoneonoff.size()
-    
-    def zone = zoneonoff[1]
-    def scheduleid
-    def scheduleName
-    def schMap = atomicState.scheduleMap
-    //if (zoneonoff[1].toInteger() == 0) zone = "0"
-    //else if (zoneonoff[1].toInteger()<10) zone = "0${zoneonoff[1]}"
-   	//else zone = zoneonoff[1]
+    log.debug "cloud zoneState: ${params.command}"
+    def commandParams = params.command
 
-    //def childDevice = childDevices.find{it.deviceNetworkId == "${app.id}.${zone}"}
-    def parentDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}    
-    def name = 'switch'
+    def eventMap = commandParams.split(',')
+
+    //zon = true, zoff = false
+    def onCommand = eventMap[0] == "zon" ? true : false
+    def zone = eventMap[1].toInteger()
+    def duration = (eventMap[2].toInteger() != 0) ? Math.round(eventMap[2].toInteger()/60) : 0
+    //schedule
+    def scheduleId = onCommand ? eventMap[3] : eventMap[5]
+    def isSchedule = scheduleId != "0"
+    def scheduleName = scheduleId == "1" ? "Run All Zones" : getScheduleName(scheduleId)
+
+    def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+
     def value
     def message
-    def gpm
-    def amp    
-        
+
     int zone_on = atomicState.zones_on
-    switch(zoneonoff[0]) {
-        case "zon":            
-            value = 'open'
-            message = "on"
-            //if (zone != "0")
-            zone_on++
-            if (zoneonoff[2].toInteger() != 0) message += " for ${Math.round(zoneonoff[2].toInteger()/60)} mins"            
-            break
-        case "zoff":
-            value = 'closed'
-            message = "off"
-            //if (zone != "0")
-            zone_on--
-            break        
+
+    //schedule start (controllerState)
+    if (zone == 0 && onCommand) {
+        value = "on"
+        message = "${scheduleName} started, ending in ${duration} mins"
     }
-    
+    //schedule end (controllerState)
+    else if (zone == 0 && !onCommand) {
+        value = "off"
+        message = "${scheduleName} complete"
+    }
+    //zone on
+    else if (onCommand) {
+        value = "open"
+        if (isSchedule) message = "${scheduleName} on, Zone ${zone} watering for ${duration} mins"
+        else message = "Zone ${zone} watering for ${duration} mins"
+        zone_on++
+    }
+    //zone off
+    else {
+        value = "closed"
+        if (isSchedule) message = "${scheduleName} on, Zone ${zone} off"
+        else message = "Zone ${zone} off"
+        zone_on--
+    }
+
     if (zone_on < 0) zone_on = 0
     log.debug "zone_on count: ${zone_on}"
-    /*
-    if (atomicState.zones_on == 0 && zone_on == 1) parentDevice.generateEvent([name: 'switch', value: "on", descriptionText: "${settings.controller} ${message}", isStateChange: true, displayed: true])
-    else if (atomicState.zones_on >= 1 && zone_on == 0) parentDevice.generateEvent([name: 'switch', value: "off", descriptionText: "${settings.controller} ${message}", isStateChange: true, displayed: true])    
-    */
+
     atomicState.zones_on = zone_on
-	/* 
-    if (zoneonoff[0] == "zoff" && sz >= 5){
-    	gpm = [name: 'gpm', value: "${zoneonoff[3]}", descriptionText: "${childDevice} gpm flow ${zoneonoff[3]}", isStateChange: true, displayed: true]
-        amp = [name: 'amp', value: "${zoneonoff[4]}", descriptionText: "${childDevice} valve check ${zoneonoff[4]}", isStateChange: true, displayed: true]
-        childDevice.generateEvent(gpm)
-        childDevice.generateEvent(amp)
-        
-        parentDevice.generateEvent(amp)
-        if ("${zoneonoff[3]}" != 'ok') note('Valve Fault', "${childDevice} gpm flow ${zoneonoff[3]}")
-        if ("${zoneonoff[4]}" != 'ok') note('Valve Fault', "${childDevice} valve check ${zoneonoff[4]}")
-    }
-    */
-    def zoneResult = [name: zone, value: value, descriptionText: "Zone${zone} ${message}", isStateChange: true, displayed: true]
-    
-    log.debug zoneResult
-    parentDevice.generateEvent(zoneResult)
-    
-    def masterResult = [name: name, value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
-    if (zone == "0"){
-    	if (value == 'off') masterResult = [name: 'status', value: 'ready', descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
-    	else if (value == 'on') masterResult = [name: 'status', value: 'active', descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
-        parentDevice.generateEvent(masterResult)
-    }
-    else if (zone != "0"){
-    	masterResult = [name: 'status', value: value, descriptionText: "${childDevice} ${message}", isStateChange: true, displayed: true]
-    	parentDevice.generateEvent(masterResult)
-    }
-    
-    if (sz >= 5) note('Zone',"${parentDevice} ${message}")
-    return [error: false, return_value: 1]    
+
+    def zoneResult = [name: zone, value: value, descriptionText: message, isStateChange: true, displayed: true]
+
+    if (DEBUG) log.debug zoneResult
+    controllerDevice.generateEvent(zoneResult)
+
+    return [error: false, return_value: 1]
 }
 
 //*************************** outgoing commands ***************************
 
 //turn on/off zones to cloud
-void zoneOnOff(dni, onoff, level) {
-    log.debug "Cloud zoneOnOff ${dni} ${onoff} ${level}"
-   	//def zone = 2
-    //String zone_dni = "${dni}"
-    def zone = dni.toInteger()//zone_dni[-2..-1]
-    
-    log.debug zone
+void zoneOnOff(zone, onoff, duration) {
+    log.debug "Cloud zoneOnOff ${zone} ${onoff} ${duration}"
+
+    //def zone = zone.toInteger()
 
     def POSTparams = [
         uri: 'https://api.spruceirrigation.com/v2/zone',
         body: [
             zone: zone,
             zonestate: onoff,
-            zonetime: level*60
+            zonetime: duration*60
         ]
     ]
 
     sendPost(POSTparams)
-    
+
 }
 
+//not currently used (spruce wifi controller v1.0)
 void scheduleOnOff(name, onoff){
 	def OnOff = 'stopped'
     if (onoff.toInteger() == 1) OnOff = 'started'
     def message = "Schedule ${name} ${OnOff}"
     log.debug "scheduleOnOff ${name} ${OnOff}"
-    
+
     note('Schedule',message)
-    
-    def tempManualMap = atomicState.manualMap
+
+    def manSchMap = atomicState.manualMap
     def scheduleID
-    tempManualMap.each{
-    	if ("${tempManualMap[it.key]['name']}" == "${name}") scheduleID = "${tempManualMap[it.key]['scheduleid']}"
+    manSchMap.each{
+    	if ("${manSchMap[it.key]['name']}" == "${name}") scheduleID = "${manSchMap[it.key]['scheduleid']}"
 	}
-    
+
     def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/schedule',
                     body: [
@@ -792,19 +744,19 @@ void scheduleOnOff(name, onoff){
 
 }
 
-void runAll(runtime){
+void runAll(duration){
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/runall',
                     body: [
-                        zonetime: runtime
+                        zonetime: duration*60
                     ]
                 ]
 
     sendPost(POSTparams)
 }
 
-void send_pause(pausetime){
-	log.debug "send_pause ${pausetime} sec" 
+void sendPause(pausetime){
+	log.debug "sendPause ${pausetime} sec"
 	if (pausetime < 0) pausetime = 0;
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/pause',
@@ -816,21 +768,21 @@ void send_pause(pausetime){
     sendPost(POSTparams)
 }
 
-void send_resume(){
-	log.debug "send_resume"
+void sendResume(){
+	log.debug "sendResume"
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/resume',
-                    body: [                        
+                    body: [
                     ]
                 ]
 
     sendPost(POSTparams)
 }
 
-void send_stop(){	
+void sendStop(){
 	def POSTparams = [
                     uri: 'https://api.spruceirrigation.com/v2/stop',
-                    body: [                        
+                    body: [
                     ]
                 ]
 
@@ -851,15 +803,15 @@ def sendPost(POSTparams) {
 	POSTparams.headers = [ 	"Authorization": "Bearer ${atomicState.authToken}"]
     try{
         httpPost(POSTparams){
-            resp -> 
+            resp ->
             if ("${resp.data.error}" == 'true') note('error', "${resp.data.message}")
-        }                
-    } 
+        }
+    }
     catch (error) {
         log.debug "post error: $error"
         def success = false
 		try {
-        	success = refreshAuthToken()    
+        	success = refreshAuthToken()
         }
         catch (e){
         	log.debug "refresh token failed! ${e}"
@@ -869,7 +821,7 @@ def sendPost(POSTparams) {
         	retryInitialRequest(POSTparams)
         }
     }
-   	
+
 }
 
 def retryInitialRequest(POSTparams) {
@@ -877,12 +829,12 @@ def retryInitialRequest(POSTparams) {
     try{
         httpPost(POSTparams){
             resp -> //resp.data {
-            log.debug "${resp.data}"               
-        }                
-    } 
+            log.debug "${resp.data}"
+        }
+    }
     catch (error) {
         log.debug "send DB error: $error"
-        
+
     }
 }
 
@@ -891,7 +843,7 @@ def retryInitialRequest(POSTparams) {
 def oauthInitUrl(){
 	// Generate a random ID to use as a our state value. This value will be used to verify the response we get back from the third-party service.
     atomicState.oauthInitState = UUID.randomUUID().toString()
-    
+
 	def oauthParams = [
         response_type: "code",
         scope: "basic",
@@ -902,10 +854,10 @@ def oauthInitUrl(){
     ]
 	def apiEndpoint = "https://app.spruceirrigation.com/oauth"
     def oAuthInitURL = "${apiEndpoint}/authorize?${toQueryString(oauthParams)}"
-    
+
     log.debug "oAuthInitURL ${oAuthInitURL}"
     redirect(location: "${oAuthInitURL}")
-    
+
 }
 
 // The toQueryString implementation simply gathers everything in the passed in map and converts them to a string joined with the "&" character.
@@ -918,33 +870,31 @@ def callback() {
 
     def code = params.code
     def oauthState = params.state
-	log.debug "callback code ${code} state ${oauthState}"
+	if (DEBUG) log.debug "callback code ${code} state ${oauthState}"
     // Validate the response from the third party by making sure oauthState == state.oauthInitState as expected
     if (oauthState == atomicState.oauthInitState){
         def tokenParams = [
-            uri: "https://app.spruceirrigation.com/oauth/token",        
+            uri: "https://app.spruceirrigation.com/oauth/token",
             body: [
                     grant_type: "authorization_code",
                     code      : code,
-                    scope: "basic",            
+                    scope: "basic",
                     client_id : atomicState.clientid,
                     client_secret: atomicState.clientSecret,
-                    redirect_uri: "https://graph.api.smartthings.com/oauth/callback"        
+                    redirect_uri: "https://graph.api.smartthings.com/oauth/callback"
                 ]
         ]
-        log.debug tokenParams
+
         httpPost(tokenParams) { resp ->
-        	log.debug "tokenParams: ${resp.data}"
         	atomicState.refreshToken = resp.data.refresh_token
-            atomicState.authToken = resp.data.access_token           
+            atomicState.authToken = resp.data.access_token
         }
-        
+
         //send access_token to spruce
         if (atomicState.authToken && !atomicState.accessTokenPut) {
-        	
+
             def accessToken_url = "https://api.spruceirrigation.com/smartthings/accesstoken"
-            log.debug accessToken_url
-            
+
             def accessParams = [
             	uri: accessToken_url,
                 headers: [ 	"Authorization": "Bearer ${atomicState.authToken}"],
@@ -952,10 +902,10 @@ def callback() {
                 		smartthings_token: atomicState.accessToken
                 ]
             ]
-            
+
             try{
                 httpPost(accessParams) { resp ->
-                    log.debug resp.data.error
+                    if (DEBUG) log.debug resp.data.error
                     if (resp.data.error == false){
                     	atomicState.accessTokenPut = true
                         success()
@@ -966,23 +916,23 @@ def callback() {
                 log.error e
                 fail()
             }
-            
-        } 
+
+        }
         else fail()
-    } 
+    }
     else log.error "callback() failed. Validation of state did not match. oauthState != atomicState.oauthInitState"
     success()
 }
 
 private refreshAuthToken() {
-    def refreshParams = [        
+    def refreshParams = [
         uri: "https://app.spruceirrigation.com/oauth/token",
         body: [grant_type: "refresh_token", refresh_token: atomicState.refreshToken, client_id: atomicState.clientid, client_secret: atomicState.clientSecret]
     ]
     try{
         def jsonMap
         httpPost(refreshParams) { resp ->
-            log.debug resp.data
+            if (DEBUG) log.debug resp.data
             if(resp.status == 200)
             {
                 jsonMap = resp.data
@@ -991,7 +941,7 @@ private refreshAuthToken() {
                     atomicState.authToken = resp.data.access_token
                     return true
             	}
-                
+
         	}
     	}
     }
@@ -1026,13 +976,13 @@ def displayMessageAsHtml(message) {
         <html>
             <head>
             </head>
-            <body>            	
-                <div>                
+            <body style="background-color:#A3A199;">
+                <div>
                     ${message}
                 </div>
             </body>
         </html>
     """
-    
+
     render contentType: 'text/html', data: html
 }
