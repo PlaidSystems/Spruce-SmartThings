@@ -680,6 +680,9 @@ def zoneState(){
 
     if (DEBUG) log.debug zoneResult
     controllerDevice.generateEvent(zoneResult)
+    //send notification
+    if (zone == 0) note('Schedule',message)
+    else note('Zone',message)
 
     return [error: false, return_value: 1]
 }
