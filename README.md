@@ -1,15 +1,15 @@
 # Spruce-SmartThings
 *Connect Spruce GEN2 Wifi controller to SmartThings(ST)*
 
-Integrate Spruce GEN2 Controller and GEN1, GEN2 or GEN3 Sensors with SmartThings. Control zones and manual schedules, pause or stop watering, recieve notifications, recieve sensor readings, use SmartThings automations or IFTTT.
+Integrate Spruce GEN2 Controller and GEN1, GEN2 or GEN3 Sensors with SmartThings. Control zones, pause or stop watering, receive notifications, receive sensor readings, use SmartThings automations or IFTTT.
 
 **Requires**
   - Spruce GEN2 Wifi Controller
   - Samsung SmartThings Hub
   
 **Installation**
-  - Smartapp- Spruce Connect, Optional: Spruce Water on Demand
-  - Device Handlers- Spruce wifi master, Spruce wifi schedule, Spruce wifi zone
+  - Smartapp- Spruce Connect
+  - Device Handlers- Spruce Wifi Controller
   
 **Features**
   - Spruce Connect uses OAUTH2 to connect SmartThings to Spruce Cloud.
