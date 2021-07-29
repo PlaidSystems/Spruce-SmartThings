@@ -20,7 +20,7 @@
 
  **/
 
-def getVERSION() {"Spruce-Connect v1.5\n 7.2021"}
+def getVERSION() {"Spruce-Connect v2\n 7.2021"}
 def getDEBUG() {true}
 
 definition(
