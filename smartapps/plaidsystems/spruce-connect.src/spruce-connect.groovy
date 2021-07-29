@@ -102,7 +102,7 @@ def pageDevices(){
         dynamicPage(name: "pageDevices", uninstall: true, install:true) {
         	if(atomicState.zoneUpdate == true) section("Device changes found, device tiles will be updated! \n\nErrors will occur if devices are assigned to Automations and SmartApps, please remove before updating.\n"){}
          	section("Select settings for connected devices\nConnected controller: ${settings.controller}\nConnected zones: ${zoneList()}") {
-                input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['Schedule','Zone','Valve Fault']])
+                input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['Schedule','Zone']])
             }
             section("SmartThings Spruce Sensors that will report to Spruce Cloud:") {
                 input "sensors", "capability.relativeHumidityMeasurement", title: "Spruce Moisture sensors:", required: false, multiple: true
@@ -524,12 +524,10 @@ def contactHandler(evt) {
     log.debug "contactHandler: ${evt.device}, ${evt.name}, ${evt.value}"
 
     def device = atomicState.contacts["${evt.device}"]
-    def value = evt.value
-
     def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
 
     if (controllerDevice != null){
-        def eventMap = [name: evt.name, value: value, descriptionText: evt.name, isStateChange: true, displayed: false]
+        def eventMap = [name: evt.name, value: evt.value, descriptionText: "${evt.device} ${evt.value}", isStateChange: true, displayed: false]
         controllerDevice.generateEvent(eventMap)
     }
 
@@ -548,13 +546,11 @@ def contactHandler(evt) {
 def motionHandler(evt) {
     log.debug "motionHandler: ${evt.device}, ${evt.name}, ${evt.value}"
 
-    def device = atomicState.motions["${evt.device}"]
-    def value = evt.value
-
+    def device = atomicState.contacts["${evt.device}"]
     def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
 
     if (controllerDevice != null){
-        def eventMap = [name: evt.name, value: value, descriptionText: evt.name, isStateChange: true, displayed: false]
+        def eventMap = [name: evt.name, value: evt.value, descriptionText: "${evt.device} ${evt.value}", isStateChange: true, displayed: false]
         controllerDevice.generateEvent(eventMap)
     }
 
@@ -620,14 +616,13 @@ def pause(){
 
     def eventMap = commandParams.split(',')
 
-    def name = 'pause'
-    def value = (eventMap[1].toInteger() == 1 ? 'on' : 'off')
-    def message = "pause is ${value}"
+    //check if pause or resume
+    def value = (eventMap[1].toInteger() == 1 ? "pause" :  "resume")    
 
     def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
 
-    def result = [name: name, value: value, descriptionText: "${controllerDevice} ${message}", isStateChange: true, displayed: true]
-    controllerDevice.generateEvent(result)
+    def event = [name: value, value: value, descriptionText: "${controllerDevice} schedule ${value}", isStateChange: true, displayed: true]
+    controllerDevice.generateEvent(event)
 
     return [error: false, return_value: 1]
 }
@@ -976,7 +971,7 @@ def displayMessageAsHtml(message) {
         <html>
             <head>
             </head>
-            <body style="background-color:#A3A199;">
+            <body>
                 <div>
                     ${message}
                 </div>

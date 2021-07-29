@@ -83,6 +83,9 @@ def generateEvent(eventMap) {
     def child = childDevices.find{it.deviceNetworkId == "${device.deviceNetworkId}:${eventMap.name}"}
     if (child) {
     	child.sendEvent(name: "valve", value: eventMap.value)
+
+		def valveState = eventMap.value == "open" ? "on" : "off"
+		sendEvent(name: "controllerState", value: valveState, isStateChange: true, displayed: false)
     }
 	else if (eventMap.name == 0) {
 		sendEvent(name: "controllerState", value: eventMap.value, isStateChange: true)
@@ -93,6 +96,13 @@ def generateEvent(eventMap) {
 	else if (eventMap.name == "rainsensor") {
 		sendEvent(name: "rainSensor", value: eventMap.value, isStateChange: true)
 	}
+	else if (eventMap.name == "pause") {
+		sendEvent(name: "controllerState", value: "pause", isStateChange: true)
+	}
+	else if (eventMap.name == "resume") {
+		sendEvent(name: "controllerState", value: "on", isStateChange: true)
+	}
+	//contact and motion have no effect since they will be handled by pause
 	else log.debug "uncaught event >> ${eventMap}"
 
 	//always update status message
@@ -202,6 +212,16 @@ def getValveDuration() {
 	return (device.latestValue("valveDuration").toInteger())
 }
 
+def on() {
+	log.debug "on"
+	setControllerState("on")
+}
+
+def off() {
+	log.debug "off"
+	setControllerState("off")
+}
+
 //controllerState
 def setControllerState(state) {
 	if (DEBUG) log.debug "state ${state}"
@@ -209,16 +229,8 @@ def setControllerState(state) {
 
 	switch(state) {
 		case "on":
-			startSchedule()
-			/*if (!rainDelay()) {
-				sendEvent(name: "switch", value: "on", displayed: false)
-				sendEvent(name: "status", value: "initialize schedule", descriptionText: "initialize schedule")
-				startSchedule()
-			}*/
-			break
-		case "off":
-			sendEvent(name: "switch", value: "off", displayed: false)
-			scheduleOff()
+			sendEvent(name: "switch", value: "on", displayed: false)
+			runAllZones()
 			break
 		case "pause":
 			pause()
@@ -226,55 +238,42 @@ def setControllerState(state) {
 		case "resume":
 			resume()
 			break
+		case "off":
+			sendEvent(name: "switch", value: "off", displayed: false)
+			turnOff()
+			break
 	}
 }
 
-//on & off from switch
-def on() {
-	log.debug "switch on"
-	setControllerState("on")
+//run all enabled zones
+def runAllZones() {
+	def duration = getValveDuration()
+
+	if (DEBUG) log.debug "startSchedule all enabled zones for ${duration}"
+	parent.runAll(duration)
 }
 
-def off() {
-	log.debug "switch off"
-	setControllerState("off")
+//stop everything
+def turnOff() {
+	parent.sendStop()
 }
 
+//pause schedule
 def pause() {
 	log.debug "pause"
-	sendEvent(name: "switch", value: "off", displayed: false)
 	sendEvent(name: "status", value: "paused schedule", descriptionText: "pause on")
-	//pause schedule
+
 	parent.sendPause(0)
 }
 
+//resume schedule
 def resume() {
 	log.debug "resume"
-	sendEvent(name: "switch", value: "on", displayed: false)
 	sendEvent(name: "status", value: "resumed schedule", descriptionText: "resume on")
-	//resume schedule
+
 	parent.sendResume()
 }
 
-//set raindelay
-def rainDelay() {
-	if (rainSensorEnable && device.latestValue("rainSensor") == "wet") {
-		sendEvent(name: "switch", value: "off", displayed: false)
-		sendEvent(name: "controllerState", value: "off")
-		sendEvent(name: "status", value: "rainy")
-		return true
-	}
-	return false
-}
-
-//schedule on/off
-def scheduleOn() {
-	def duration = (device.latestValue("valveDuration").toInteger())
-	parent.runAll(duration)
-}
-def scheduleOff() {
-	parent.sendStop()
-}
 
 // Commands to zones/valves
 def valveOn(valueMap) {
@@ -293,15 +292,4 @@ def valveOff(valueMap) {
 	sendEvent(name: "status", value: "${valueMap.label} turned off", descriptionText: "${valueMap.label} turned off")
 	if (DEBUG) log.debug "valve off"
 	parent.zoneOnOff(zone, 0, 0)
-}
-
-
-//------------------end commands----------------------------------//
-
-//get times from settings and send to controller, then start schedule
-def startSchedule() {
-	def duration = getValveDuration()
-
-	if (DEBUG) log.debug "startSchedule all enabled zones for ${duration}"
-	parent.runAll(duration)
 }
