@@ -16,11 +16,11 @@
  Version v1.5
  * update for 2021 app
  * remove componentName and componentLabel from childDevice FIXED new app issues
- * updating enabled zones in Spruce app causes dth offline **need to fix**
+ * recreate device each time zones are enabled/disabled in Spruce app
 
  **/
 
-def version() {"Spruce-Connect v1.5\n 7.2021"}
+def getVERSION() {"Spruce-Connect v1.5\n 7.2021"}
 def getDEBUG() {true}
 
 definition(
@@ -35,10 +35,6 @@ definition(
     oauth: true,
     singleInstance: true)
 {
-	//appSetting "clientId"
-	//appSetting "clientSecret"
-    //appSetting "serverUrl"
-
     atomicState.clientid = "smartthings"
     atomicState.clientSecret = "081ce71eec73b1fdad2253d1d88819a5"
 }
@@ -53,6 +49,8 @@ preferences (oauthPage: "authPage") {
 }
 
 def authPage(){
+    //hack to only call settings 1x
+    atomicState.getSettings = true
     if(!atomicState.accessToken) atomicState.accessToken = createAccessToken()	//set = so token is saved to atomicState
 
     if(!atomicState.authToken){
@@ -89,7 +87,7 @@ def pageController(){
             section("Select Spruce Controller\n to connect with SmartThings") {
             	input(name: "controller", title:"Select Spruce Controller:", type: "enum", required:true, multiple:false, description: "Tap to choose", metadata:[values:select_device])
     		}
-            section("${version()}")
+            section(VERSION)
         }
     }
     else pageDevices()
@@ -97,11 +95,12 @@ def pageController(){
 
 def pageDevices(){
 	if (atomicState.authToken && controllerSelected() && getControllerSettings()){
+      atomicState.getSettings = false
       if (DEBUG) log.debug atomicState.zoneUpdate
       if (DEBUG) log.debug "pageDevices"
         dynamicPage(name: "pageDevices", uninstall: true, install:true) {
-        	if(atomicState.zoneUpdate == true) section("Device changes found, device tiles will be updated! \n\nErrors will occur if devices are assigned to Automations and SmartApps, please remove before updating.\n"){}
-         	section("Select settings for connected devices\nConnected controller: ${settings.controller}\nConnected zones: ${zoneList()}") {
+        	if(atomicState.zoneUpdate == true) section("New zones enabled or disabled, device will be updated! \n\nAutomations and SmartApps will need to be re-configured!\n"){}
+         	section("Settings for ${settings.controller},\nConnected zones: ${zoneList()}") {
                 input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['Schedule','Zone']])
             }
             section("SmartThings Spruce Sensors that will report to Spruce Cloud:") {
@@ -112,7 +111,7 @@ def pageDevices(){
 				input "motions", "capability.motionSensor", title: "Motion sensors will pause or resume water:", required: fales, multiple: true
                 input "delay", "number", title: "The delay in minutes that water will resume after the contact is closed or motion stops, default=5, max=119", required: false, range: '0..119'
             }
-            section("${version()}")
+            section(VERSION)
         }
     }
     else {
@@ -261,22 +260,18 @@ def getValveConfiguration(){
 private void createChildDevices(){
 	log.debug "create zone children ${atomicState.zoneUpdate} with ${app.id}"
 
+    //get Spruce Controller Name
+    def controllerLabel
+    def tempSwitch = atomicState.switches
+    tempSwitch.each{
+        controllerLabel = it.key
+    }
 
-
-    //if(atomicState.zoneUpdate == true){
-    	//removeChildDevices()
-
-        //get Spruce Controller Name
-        def controllerLabel
-        def tempSwitch = atomicState.switches
-        tempSwitch.each{
-            controllerLabel = it.key
-        }
-
-        def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
-        if (!controllerDevice) addChildDevice("Spruce Wifi Controller", "${app.id}", null, [completedSetup: true, label: controllerLabel, isComponent: false])
-        else controllerDevice.updated()
-    //}
+    def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
+    if(atomicState.zoneUpdate == true) {
+        if (controllerDevice) deleteChildDevice("${app.id}")
+        addChildDevice("Spruce Wifi Controller", "${app.id}", null, [completedSetup: true, label: controllerLabel, isComponent: false])
+    }
 
 }
 
@@ -355,7 +350,8 @@ def getControllerList(){
 
 //check for pre-set schedules
 def getControllerSettings(){
-	log.debug "-----------settings----------------"
+	if (!atomicState.getSettings) return true
+    log.debug "-----------settings----------------"
     def respMessage = ""
     def key = atomicState.authToken
 
@@ -434,29 +430,26 @@ def getControllerSettings(){
         else return false
     }
 
-    if (DEBUG) log.debug manSchMap
+    if (DEBUG) log.debug zoneMap
 
-    if(atomicState.manualMap != null){
-        if ("${manSchMap.sort()}" != "${atomicState.manualMap.sort()}") atomicState.manualUpdate = true
-        else atomicState.manualUpdate = false
 
-        //do we update zone child devices
-        atomicState.zoneUpdate = false
-        def tempMap = atomicState.zoneMap
-        def names = ""
-        def newnames = ""
+    if(atomicState.zoneMap != null){
+       def newZones = ""
         zoneMap.sort().each{
-            newnames += zoneMap[it.key]['zone_name']
+            newZones += it.key
         }
-        tempMap.sort().each{
-            names += tempMap[it.key]['zone_name']
+        def oldZoneMap = atomicState.zoneMap
+        def oldZones = ""
+        oldZoneMap.sort().each{
+            oldZones += it.key
         }
-        if(names != newnames) atomicState.zoneUpdate = true
+        log.debug "${newZones} ${oldZones}"
+        if(newZones == oldZones) atomicState.zoneUpdate = false
+        else atomicState.zoneUpdate = true
+
     }
-    else {
-    	atomicState.zoneUpdate = true
-        atomicState.manualUpdate = true
-	}
+    else atomicState.zoneUpdate = true
+
 
     atomicState.scheduleMap = schMap
     atomicState.manualMap = manSchMap
@@ -617,7 +610,7 @@ def pause(){
     def eventMap = commandParams.split(',')
 
     //check if pause or resume
-    def value = (eventMap[1].toInteger() == 1 ? "pause" :  "resume")    
+    def value = (eventMap[1].toInteger() == 1 ? "pause" :  "resume")
 
     def controllerDevice = childDevices.find{it.deviceNetworkId == "${app.id}"}
 

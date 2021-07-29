@@ -38,9 +38,6 @@ metadata {
 		capability "heartreturn55003.rainSensor"
 		capability "heartreturn55003.valveDuration"
 
-		capability "Configuration"
-		capability "Refresh"
-
 		attribute "status", "string"
 		attribute "controllerState", "string"
 		attribute "rainSensor", "string"
@@ -187,11 +184,6 @@ def removeChildDevices() {
 
 
 //----------------------------------commands--------------------------------------//
-
-// handle commands
-def ping() { log.debug "ping" }
-def refresh() { log.debug "refresh" }
-def configure() { log.debug "configure" }
 
 def setStatus(status) {
 	if (DEBUG) log.debug "status ${status}"
