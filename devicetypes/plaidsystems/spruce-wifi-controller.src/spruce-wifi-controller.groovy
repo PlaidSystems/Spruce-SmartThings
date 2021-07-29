@@ -21,7 +21,7 @@
 import groovy.json.JsonOutput
 
 //dth version
-def getVERSION() {"v1.0 7-2021"}
+def getVERSION() {"v2.0 7-2021"}
 def getDEBUG() {true}
 def getHC_INTERVAL_MINS() {60}
 
