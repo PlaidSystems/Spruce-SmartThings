@@ -102,7 +102,7 @@ def pageDevices(){
         dynamicPage(name: "pageDevices", uninstall: true, install:true) {
         	if(atomicState.zoneUpdate == true) section("Device changes found, device tiles will be updated! \n\nErrors will occur if devices are assigned to Automations and SmartApps, please remove before updating.\n"){}
          	section("Select settings for connected devices\nConnected controller: ${settings.controller}\nConnected zones: ${zoneList()}") {
-                input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['Schedule','Zone','Valve Fault']])
+                input(name: "notifications", title:"Select Notifications used in SmartThings:", type: "enum", required:false, multiple:true, description: "Tap to choose", metadata:[values: ['App Disconnected','Schedule','Zone','Valve Fault']])
                 input(name: "pause", title:"Turn on to create Spruce Pause control that is accesible from automation routines to pause and resume water", type: 'bool')
             }
             section("SmartThings Spruce Sensors that will report to Spruce Cloud:") {
@@ -198,6 +198,8 @@ def initialize() {
         addDevices()
     	createChildDevices()        
 	}    
+	atomicState.authCounter = 0
+	log.debug "authCounter: $atomicState.authCounter"
 }
 
 //get zone device list
@@ -902,7 +904,19 @@ def sendPost(POSTparams) {
     try{
         httpPost(POSTparams){
             resp -> 
-            if ("${resp.data.error}" == 'true') note('error', "${resp.data.message}")
+            if ("${resp.data.error}" == 'true') 
+			{
+				note('error', "${resp.data.message}")
+			}
+			else
+			{
+				if(atomicState.authCounter > 0)
+				{
+					atomicState.authCounter = 0
+					log.debug "authToken: $atomicState.authCounter"
+					note('App Disconnected', "Spruce SmartApp Reconnected.")
+				}
+			}
         }                
     } 
     catch (error) {
@@ -1045,11 +1059,17 @@ private refreshAuthToken() {
         	}
     	}
     }
-    catch (error) {
-        log.debug "token refresh error: $error"
+	catch (error) {
+		log.debug "token refresh error: $error"
+		log.debug "authToken: $atomicState.authToken"
+		atomicState.authCounter = atomicState.authCounter + 1
+		log.debug "authCounter: $atomicState.authCounter"
+		if(atomicState.authCounter % 25 == 1)
+		{
+			note('App Disconnected', "There is an issue with the SmartApp.  Please relaunch Spruce Connect.")
+		}
         return false
-    }
-    //return false
+	}
 }
 
 // Example success method
