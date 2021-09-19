@@ -1,45 +1,49 @@
 # Spruce-SmartThings
 *Connect Spruce GEN2 Wifi controller to SmartThings(ST)*
 
-Integrate Spruce GEN2 Controller and GEN1, GEN2 or GEN3 Sensors with SmartThings. Control zones and manual schedules, pause or stop watering, recieve notifications, recieve sensor readings, use SmartThings automations or IFTTT.
+Integrate Spruce GEN2 Controller and GEN1, GEN2 or GEN3 Sensors with SmartThings 2021 app. Control zones, pause or stop watering, receive notifications, receive sensor readings, use SmartThings automations or IFTTT.
 
 **Requires**
   - Spruce GEN2 Wifi Controller
   - Samsung SmartThings Hub
   
 **Installation**
-  - Smartapp- Spruce Connect, Optional: Spruce Water on Demand
-  - Device Handlers- Spruce wifi master, Spruce wifi schedule, Spruce wifi zone
+  - Smartapp- Spruce Connect
+  - Device Handlers- Spruce Wifi Controller
   
 **Features**
-  - Spruce Connect uses OAUTH2 to connect SmartThings to Spruce Cloud.
-  - Master controller device with status, run all zones, pause and manual schedule controls
-  - Child Zone devices with individual zone control and monitoring
-  - Each zone and each manual schedule provided as "devices" that can be used as "switches" within standard ST automations and SmartApps
+  - Spruce Connect uses OAUTH2 to connect SmartThings to Spruce Cloud
+  - Spruce Controller device Controller State, status, time, rain sensor and each enabled zone
+  - Full device capability now available for use in the SmartThings app Automation tool.  Including on, pause, resume, off, status, rain sensor, duration, each zone.
   - "Contacts" can be selected to pause/resume schedules
   - Pause device can be enabled and used in automations or SmartApps to pause/resume schedules
-  - Schedule, zone and valve error notifications available
-  - Valve health and flow (when used with flow meter)
-  - Spruce sensors paired with ST can use the Spruce Connect to report values to the Spruce Cloud.
-  - Optional: [*Spruce Water on Demand*](https://github.com/PlaidSystems/Spruce-SmartThings/blob/master/smartapps/plaidsystems/spruce-water-on-demand.src/spruce-water-on-demand.groovy) SmartApp, Controller, Manual Schedules or Zones can be set to water at a specific time, or based on Soil Moisture Sensor value
+  - Schedule and zone notifications available
+  - Spruce sensors paired with ST can use the Spruce Connect to report values to the Spruce Cloud
   
 **Install Overview**
 
-*It is recommended to setup and name all zones before connecting Spruce and SmartThings*
+*It is recommended to setup and configure all zones before connecting Spruce and SmartThings*
   1. Log into SmartThings IDE https://graph.api.smartthings.com/ with your SmartThings Username and Password
-  2. Create a new SmartApp using the [*Spruce Connect*](https://github.com/PlaidSystems/Spruce-SmartThings/blob/master/smartapps/plaidsystems/spruce-connect.src/spruce-connect.groovy) code
+  2. Create a new SmartApp using the [*Spruce Connect*](https://raw.githubusercontent.com/PlaidSystems/Spruce-SmartThings/master/smartapps/plaidsystems/spruce-connect.src/spruce-connect.groovy) code
       - Add a new SmartApp from Code
       - Copy and Paste the code
       - Save
       - In App Settings, **Enable OAUTH**
       - Save and Publish
   3. Create 3 new device handlers using the code from:
-      - [*Spruce wifi master*](https://github.com/PlaidSystems/Spruce-SmartThings/blob/master/devicetypes/plaidsystems/spruce-wifi-master.src/spruce-wifi-master.groovy)
-      - [*Spruce wifi schedule*](https://github.com/PlaidSystems/Spruce-SmartThings/blob/master/devicetypes/plaidsystems/spruce-wifi-schedule.src/spruce-wifi-schedule.groovy)
-      - [*Spruce wifi zone*](https://github.com/PlaidSystems/Spruce-SmartThings/blob/master/devicetypes/plaidsystems/spruce-wifi-zone.src/spruce-wifi-zone.groovy)
-      - Add new Device Handlers from code for each
+      - [*Spruce Wifi Controller*](https://raw.githubusercontent.com/PlaidSystems/Spruce-SmartThings/master/devicetypes/plaidsystems/spruce-wifi-controller.src/spruce-wifi-controller.groovy)
+      - Add new Device Handler from code
       - Copy and Paste the code
       - Save and Publish each
+
+Alternative setup for Github accounts:
+  
+  1. Add the GitHub Repository:
+      - Owner: PlaidSystems
+      - Name: Spruce-SmartThings
+      - Branch: Master
+      
+  2. Update from Repo selecting the device handler and smartapp listed above
       
 **Setting up**
 
@@ -49,16 +53,13 @@ Integrate Spruce GEN2 Controller and GEN1, GEN2 or GEN3 Sensors with SmartThings
   4. Select 1 Spruce Controller to link, go to *next*
   5. The SmartApp will list the zones that will be provided to SmartThings at the top of the page
   6. Select any **Contact** sensors you would like to use, these will **always** pause and resume the schedule
-  7. Select notifications that you would like to recieve through SmartThings, these settings do not effect Spruce app notification settings
-  8. Enable the **Spruce Pause Control** if you would like this control to show up as an available option for automations and SmartApps.  It can be used to pause or resume schedules.
-  9. Select any Spruce moisture sensors that are conected to SmartThings so that they will be available in the Spruce App
-  10. **Save!** your done, your Spruce devices will be under "Things" and any Sensors will start reporting to the Spruce Cloud at the next reporting interval.
+  7. Select notifications that you would like to recieve through SmartThings, these settings do not effect Spruce app notification settings 
+  8. Select any Spruce moisture sensors that are conected to SmartThings so that they will be available in the Spruce App
+  9. **Save!** your done, your Spruce Controller device will be under "Devices" and any Sensors will start reporting to the Spruce Cloud at the next reporting interval.
   
-  **TIPS**
-  - Make sure zones are setup and named correctly in the Spruce App before setting up the SmartThings integration. Simple but descriptive names are best and will help keep everything organized.  *This also helps with voice commands*
-  - Organize Master and Zone devices into a single "Room"
-  - When switching on a zone manually, the time can be set in the lower righ corner of the tile
-  - The *Start all Zones* button will run each zone for the time set in the lower right corner of the main tile
-  - Schedules can be paused with the **Contact Button** to the left of the *Start all Zones* button
-  - It is recommended to setup and name all zones before connecting Spruce and SmartThings, otherwise Automations or SmartApps utilizing the previous names will error.  When zones are re-named in the Spruce app, the device must be re-created for the name to refresh, open Spruce Connect and save again.  This will re-populate the zones and manual schedules within the SmartThings app.  The devices *must* be removed from other Automations and SmartApps before doing this.
-  - If no zone names are changed, then opening and saving new settings in the Spruce Connect will **not** re-populate the zones so Automations and other SmartApps will not be effected.
+  **TIPS**  
+  - When switching on a zone manually, the watering time can be set with the slider, or tap the slider for +/- buttons
+  - Changing the **Controller State** to **on** will run each enabled zone for the time set in the slider
+  - Schedules can be paused or resumed with the **Controller State** by selecting **pause** or **resume**
+  - If new **zones are enabled or disabled** in the Spruce app, the Spruce Controller device will be updated the next time the Spruce Connect smartapp is opened.  Automations or smartapps that utilize this device will need to be updated appropriately.
+  
